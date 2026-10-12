@@ -1,0 +1,28 @@
+MSBuild version 18.10.1-1.26427.6+3cd27c13e for .NET Framework
+
+  libcurl_object.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\_deps\curl-build\lib\libcurl_object.dir\MinSizeRel\libcurl_object.lib
+  SDL_uclibc.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\_deps\sdl-build\MinSizeRel\SDL_uclibc.lib
+  SDL3-static.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\_deps\sdl-build\MinSizeRel\SDL3-static.lib
+  imgui.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\imgui.lib
+  libcurl_static.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\_deps\curl-build\lib\MinSizeRel\libcurl.lib
+  miniz.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\miniz.lib
+  monocypher.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\monocypher.lib
+  yyjson.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\yyjson.lib
+  controller.cpp
+  platform_services.cpp
+  settings.cpp
+  Generating Code...
+  launcher_core.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\launcher_core.lib
+  application.cpp
+  main.cpp
+  Generating Code...
+  OpenBK2Launcher.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\OpenBK2Launcher-Windows-x64.exe
+  -- Launcher size: 3248640 bytes
+  core_tests.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\core_tests.exe
+  fixture_game.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\fixture_game.exe
+  installer_check.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\installer_check.exe
+  lifecycle_check.cpp
+  lifecycle_check.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\lifecycle_check.exe
+  manifest_check.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\manifest_check.exe
+  security_tests.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\security_tests.exe
+  transfer_check.vcxproj -> C:\Users\adamk\Desktop\OBK2_Launcher\build\windows\MinSizeRel\transfer_check.exe

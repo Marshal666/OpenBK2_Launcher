@@ -1,0 +1,23 @@
+Test project /home/builder/source/build/linux
+    Start 1: renderer_smoke
+1/9 Test #1: renderer_smoke ...................   Passed    0.06 sec
+    Start 2: binary_size
+2/9 Test #2: binary_size ......................   Passed    0.00 sec
+    Start 3: core_tests
+3/9 Test #3: core_tests .......................   Passed    0.00 sec
+    Start 4: security_primitives
+4/9 Test #4: security_primitives ..............   Passed    0.00 sec
+    Start 5: publisher_and_manifest
+5/9 Test #5: publisher_and_manifest ...........   Passed    0.31 sec
+    Start 6: github_publication
+6/9 Test #6: github_publication ...............   Passed    0.34 sec
+    Start 7: transfer_and_staging
+7/9 Test #7: transfer_and_staging .............   Passed   12.12 sec
+    Start 8: installer_recovery
+8/9 Test #8: installer_recovery ...............   Passed   14.74 sec
+    Start 9: launcher_lifecycle
+9/9 Test #9: launcher_lifecycle ...............   Passed   12.94 sec
+
+100% tests passed, 0 tests failed out of 9
+
+Total Test time (real) =  40.52 sec

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="8"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="42"
+	timestamp="2026-10-12T13:07:36"
+	>
+	<testcase name="renderer_smoke" classname="renderer_smoke" time="0.213513" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="binary_size" classname="binary_size" time="0.0239529" status="run">
+		<properties/>
+		<system-out>-- Launcher size: 3248640 bytes
+</system-out>
+	</testcase>
+	<testcase name="core_tests" classname="core_tests" time="0.0770922" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="security_primitives" classname="security_primitives" time="0.0949815" status="run">
+		<properties/>
+		<system-out>38 security assertions passed
+</system-out>
+	</testcase>
+	<testcase name="publisher_and_manifest" classname="publisher_and_manifest" time="1.5315" status="run">
+		<properties/>
+		<system-out>54 cross-language publisher/manifest checks passed
+</system-out>
+	</testcase>
+	<testcase name="transfer_and_staging" classname="transfer_and_staging" time="6.40037" status="run">
+		<properties/>
+		<system-out>C:\Users\adamk\Desktop\OBK2_Launcher\.tools\python\tools\Lib\zipfile\__init__.py:1642: UserWarning: Duplicate name: 'Data/base.pak'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+33 HTTP/HTTPS/resume/cancellation/ZIP checks passed
+</system-out>
+	</testcase>
+	<testcase name="installer_recovery" classname="installer_recovery" time="24.7504" status="run">
+		<properties/>
+		<system-out>197 installer assertions/process checks passed; 52 crash boundaries recovered
+</system-out>
+	</testcase>
+	<testcase name="launcher_lifecycle" classname="launcher_lifecycle" time="9.21187" status="run">
+		<properties/>
+		<system-out>7 native command checks; offline Play, language persistence, cwd/argv, process exclusion, shortcut, handoff, collision and GUI install passed
+</system-out>
+	</testcase>
+</testsuite>

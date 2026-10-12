@@ -1,0 +1,16 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {"name": "fixture-windows", "generator": "Visual Studio 18 2026", "architecture": "x64", "binaryDir": "${sourceDir}/build/windows", "cacheVariables": {"OBK_FIXTURE_BUILD": "ON", "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist"}},
+    {"name": "fixture-linux", "generator": "Ninja", "binaryDir": "${sourceDir}/build/linux", "cacheVariables": {"OBK_FIXTURE_BUILD": "ON", "CMAKE_BUILD_TYPE": "MinSizeRel", "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist"}},
+    {"name": "core-only", "generator": "Ninja", "binaryDir": "${sourceDir}/build/core", "cacheVariables": {"OBK_FIXTURE_BUILD": "ON", "OBK_BUILD_GUI": "OFF", "CMAKE_BUILD_TYPE": "Debug"}}
+  ],
+  "buildPresets": [
+    {"name": "fixture-windows", "configurePreset": "fixture-windows", "configuration": "MinSizeRel"},
+    {"name": "fixture-linux", "configurePreset": "fixture-linux"}
+  ],
+  "testPresets": [
+    {"name": "fixture-windows", "configurePreset": "fixture-windows", "configuration": "MinSizeRel", "output": {"outputOnFailure": true}},
+    {"name": "fixture-linux", "configurePreset": "fixture-linux", "output": {"outputOnFailure": true}}
+  ]
+}

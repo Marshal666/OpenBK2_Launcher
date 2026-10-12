@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="3"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="0"
+	timestamp="2026-10-12T11:35:35"
+	>
+	<testcase name="renderer_smoke" classname="renderer_smoke" time="0.201015" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="binary_size" classname="binary_size" time="0.0251736" status="run">
+		<properties/>
+		<system-out>-- Launcher size: 2052608 bytes
+</system-out>
+	</testcase>
+	<testcase name="core_tests" classname="core_tests" time="0.0811061" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+</testsuite>

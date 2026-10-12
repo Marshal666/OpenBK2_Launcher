@@ -1,0 +1,117 @@
+#include "launcher/controller.hpp"
+#include "launcher/error.hpp"
+#include "utf8_main.hpp"
+#include <chrono>
+#include <iostream>
+#include <thread>
+using namespace launcher;
+void check(bool value, const char *message) {
+    if (!value)
+        throw std::runtime_error(message);
+}
+void idle(Controller &controller) {
+    for (unsigned i = 0; i < 600; ++i) {
+        auto state = controller.snapshot();
+        if (!state.busy && !state.checking)
+            return;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    throw std::runtime_error("Controller timeout");
+}
+int test_main(int argc, char **argv) {
+    try {
+        if (argc < 3)
+            return 2;
+        const std::string mode = argv[1];
+        if (mode == "handoff-test") {
+            SafeRoot config(utf8_path(argv[2]));
+            check(argc == 5, "handoff args");
+            complete_handoff(config, argv[4]);
+            config.write_atomic("handoff-success", "yes");
+            return 0;
+        }
+        if (mode == "relocate") {
+            SafeRoot config(utf8_path(argv[2]), true), destination(utf8_path(argv[3]), true);
+            prepare_relocation(destination, config, {"handoff-test", argv[2]});
+            return 0;
+        }
+        if (mode == "shortcut") {
+            create_desktop_shortcut(utf8_path(argv[2]), utf8_path(argv[3]));
+            return 0;
+        }
+        if (mode == "spawn") {
+            ChildProcess process;
+            std::vector<std::string> args;
+            for (int i = 4; i < argc; ++i)
+                args.push_back(argv[i]);
+            std::map<std::string, std::string> env;
+#ifndef _WIN32
+            env = {{"DXVK_WSI_DRIVER", "SDL3"}, {"LD_LIBRARY_PATH", argv[3]}};
+#endif
+            process.start(utf8_path(argv[2]), utf8_path(argv[3]), args, env);
+            check(process.running(), "child not running");
+            check(game_process_running(utf8_path(argv[2])), "manual process detection failed");
+            while (process.running())
+                std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            return 0;
+        }
+        check(argc == 6, "controller args");
+        ApplicationOptions options;
+        options.config_override = utf8_path(argv[2]);
+        options.root_override = utf8_path(argv[3]);
+        options.fixture_release = argv[4];
+        options.fixture_public_key = argv[5];
+        options.auto_install = true;
+        if (mode == "offline")
+            options.fixture_release.clear();
+        Controller controller(options);
+        controller.initialize();
+        idle(controller);
+        if (mode == "missing") {
+            check(controller.snapshot().root_missing, "missing root not reported");
+            return 0;
+        }
+        if (mode == "online") {
+            controller.check_updates();
+            idle(controller);
+            check(bool(controller.snapshot().latest), "verified manifest missing");
+            controller.install();
+            idle(controller);
+            check(controller.snapshot().error.empty(), controller.snapshot().error.c_str());
+            check(controller.snapshot().ready, "not ready after install");
+        } else {
+            check(controller.snapshot().ready, "offline verification failed");
+            controller.check_updates();
+            idle(controller);
+            check(controller.snapshot().ready, "failed update check disabled Play");
+        }
+        controller.play();
+        idle(controller);
+        check(controller.game_running(), "Play failed");
+        if (mode == "online") {
+            controller.install();
+            idle(controller);
+            check(controller.snapshot().error.find("Close the game") != std::string::npos,
+                  "update accepted while game running");
+        }
+        while (controller.game_running())
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+        if (mode == "online") {
+            auto settings = controller.snapshot().settings;
+            settings.requested_language = "de";
+            controller.configure(settings);
+            idle(controller);
+            controller.install();
+            idle(controller);
+            check(controller.snapshot().ready && controller.snapshot().installed->language == "de",
+                  "language application failed");
+            SafeRoot config(options.config_override);
+            check(load_settings(config).requested_language == "de", "selection not persisted");
+        }
+        std::cout << "lifecycle passed\n";
+        return 0;
+    } catch (const std::exception &error) {
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
+}

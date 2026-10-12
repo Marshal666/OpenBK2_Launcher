@@ -1,0 +1,147 @@
+Start testing: Oct 12 14:36 Central European Daylight Time
+----------------------------------------------------------
+1/9 Testing: renderer_smoke
+1/9 Test: renderer_smoke
+Command: "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/OpenBK2Launcher-Windows-x64.exe" "--smoke-test"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"renderer_smoke" start time: Oct 12 14:36 Central European Daylight Time
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.07 sec
+----------------------------------------------------------
+Test Passed.
+"renderer_smoke" end time: Oct 12 14:36 Central European Daylight Time
+"renderer_smoke" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/9 Testing: binary_size
+2/9 Test: binary_size
+Command: "C:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" "-DBINARY=C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/OpenBK2Launcher-Windows-x64.exe" "-P" "C:/Users/adamk/Desktop/OBK2_Launcher/cmake/CheckSize.cmake"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"binary_size" start time: Oct 12 14:36 Central European Daylight Time
+Output:
+----------------------------------------------------------
+-- Launcher size: 3258368 bytes
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"binary_size" end time: Oct 12 14:36 Central European Daylight Time
+"binary_size" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/9 Testing: core_tests
+3/9 Test: core_tests
+Command: "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/core_tests.exe"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"core_tests" start time: Oct 12 14:36 Central European Daylight Time
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"core_tests" end time: Oct 12 14:36 Central European Daylight Time
+"core_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/9 Testing: security_primitives
+4/9 Test: security_primitives
+Command: "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/security_tests.exe"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"security_primitives" start time: Oct 12 14:36 Central European Daylight Time
+Output:
+----------------------------------------------------------
+38 security assertions passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"security_primitives" end time: Oct 12 14:36 Central European Daylight Time
+"security_primitives" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/9 Testing: publisher_and_manifest
+5/9 Test: publisher_and_manifest
+Command: "C:/Users/adamk/Desktop/OBK2_Launcher/.tools/python/tools/python.exe" "C:/Users/adamk/Desktop/OBK2_Launcher/tests/integration/publisher_manifest.py" "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/manifest_check.exe"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"publisher_and_manifest" start time: Oct 12 14:36 Central European Daylight Time
+Output:
+----------------------------------------------------------
+54 cross-language publisher/manifest checks passed
+<end of output>
+Test time =   1.29 sec
+----------------------------------------------------------
+Test Passed.
+"publisher_and_manifest" end time: Oct 12 14:36 Central European Daylight Time
+"publisher_and_manifest" time elapsed: 00:00:01
+----------------------------------------------------------
+
+6/9 Testing: github_publication
+6/9 Test: github_publication
+Command: "C:/Users/adamk/Desktop/OBK2_Launcher/.tools/python/tools/python.exe" "C:/Users/adamk/Desktop/OBK2_Launcher/tests/integration/github_publication.py"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"github_publication" start time: Oct 12 14:36 Central European Daylight Time
+Output:
+----------------------------------------------------------
+GitHub dry-run, all 21 failure boundaries, immutable assets, replay guards, credential isolation and publication ordering passed
+<end of output>
+Test time =   0.85 sec
+----------------------------------------------------------
+Test Passed.
+"github_publication" end time: Oct 12 14:36 Central European Daylight Time
+"github_publication" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/9 Testing: transfer_and_staging
+7/9 Test: transfer_and_staging
+Command: "C:/Users/adamk/Desktop/OBK2_Launcher/.tools/python/tools/python.exe" "C:/Users/adamk/Desktop/OBK2_Launcher/tests/integration/transfer_staging.py" "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/transfer_check.exe"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"transfer_and_staging" start time: Oct 12 14:36 Central European Daylight Time
+Output:
+----------------------------------------------------------
+C:\Users\adamk\Desktop\OBK2_Launcher\.tools\python\tools\Lib\zipfile\__init__.py:1642: UserWarning: Duplicate name: 'Data/base.pak'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+37 HTTP/HTTPS/resume/cancellation/ZIP checks passed
+<end of output>
+Test time =  22.10 sec
+----------------------------------------------------------
+Test Passed.
+"transfer_and_staging" end time: Oct 12 14:36 Central European Daylight Time
+"transfer_and_staging" time elapsed: 00:00:22
+----------------------------------------------------------
+
+8/9 Testing: installer_recovery
+8/9 Test: installer_recovery
+Command: "C:/Users/adamk/Desktop/OBK2_Launcher/.tools/python/tools/python.exe" "C:/Users/adamk/Desktop/OBK2_Launcher/tests/integration/installer_recovery.py" "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/installer_check.exe"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"installer_recovery" start time: Oct 12 14:36 Central European Daylight Time
+Output:
+----------------------------------------------------------
+198 installer assertions/process checks passed; 52 crash boundaries recovered
+<end of output>
+Test time =  29.75 sec
+----------------------------------------------------------
+Test Passed.
+"installer_recovery" end time: Oct 12 14:37 Central European Daylight Time
+"installer_recovery" time elapsed: 00:00:29
+----------------------------------------------------------
+
+9/9 Testing: launcher_lifecycle
+9/9 Test: launcher_lifecycle
+Command: "C:/Users/adamk/Desktop/OBK2_Launcher/.tools/python/tools/python.exe" "C:/Users/adamk/Desktop/OBK2_Launcher/tests/integration/launcher_lifecycle.py" "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/lifecycle_check.exe" "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/fixture_game.exe" "C:/Users/adamk/Desktop/OBK2_Launcher/build/windows/MinSizeRel/OpenBK2Launcher-Windows-x64.exe"
+Directory: C:/Users/adamk/Desktop/OBK2_Launcher/build/windows
+"launcher_lifecycle" start time: Oct 12 14:37 Central European Daylight Time
+Output:
+----------------------------------------------------------
+7 native command checks; offline Play, language persistence, cwd/argv, process exclusion, shortcut, handoff, collision and GUI install passed
+<end of output>
+Test time =   9.46 sec
+----------------------------------------------------------
+Test Passed.
+"launcher_lifecycle" end time: Oct 12 14:37 Central European Daylight Time
+"launcher_lifecycle" time elapsed: 00:00:09
+----------------------------------------------------------
+
+End testing: Oct 12 14:37 Central European Daylight Time

@@ -1,0 +1,147 @@
+Start testing: Oct 12 12:36 UTC
+----------------------------------------------------------
+1/9 Testing: renderer_smoke
+1/9 Test: renderer_smoke
+Command: "/home/builder/source/build/linux/OpenBK2Launcher-Linux-x64" "--smoke-test"
+Directory: /home/builder/source/build/linux
+"renderer_smoke" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"renderer_smoke" end time: Oct 12 12:36 UTC
+"renderer_smoke" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/9 Testing: binary_size
+2/9 Test: binary_size
+Command: "/home/builder/venv/lib/python3.11/site-packages/cmake/data/bin/cmake" "-DBINARY=/home/builder/source/build/linux/OpenBK2Launcher-Linux-x64" "-P" "/home/builder/source/cmake/CheckSize.cmake"
+Directory: /home/builder/source/build/linux
+"binary_size" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+-- Launcher size: 8036720 bytes
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"binary_size" end time: Oct 12 12:36 UTC
+"binary_size" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/9 Testing: core_tests
+3/9 Test: core_tests
+Command: "/home/builder/source/build/linux/core_tests"
+Directory: /home/builder/source/build/linux
+"core_tests" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"core_tests" end time: Oct 12 12:36 UTC
+"core_tests" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/9 Testing: security_primitives
+4/9 Test: security_primitives
+Command: "/home/builder/source/build/linux/security_tests"
+Directory: /home/builder/source/build/linux
+"security_primitives" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+38 security assertions passed
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"security_primitives" end time: Oct 12 12:36 UTC
+"security_primitives" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/9 Testing: publisher_and_manifest
+5/9 Test: publisher_and_manifest
+Command: "/home/builder/venv/bin/python3.11" "/home/builder/source/tests/integration/publisher_manifest.py" "/home/builder/source/build/linux/manifest_check"
+Directory: /home/builder/source/build/linux
+"publisher_and_manifest" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+54 cross-language publisher/manifest checks passed
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"publisher_and_manifest" end time: Oct 12 12:36 UTC
+"publisher_and_manifest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/9 Testing: github_publication
+6/9 Test: github_publication
+Command: "/home/builder/venv/bin/python3.11" "/home/builder/source/tests/integration/github_publication.py"
+Directory: /home/builder/source/build/linux
+"github_publication" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+GitHub dry-run, all 21 failure boundaries, immutable assets, replay guards, credential isolation and publication ordering passed
+<end of output>
+Test time =   0.34 sec
+----------------------------------------------------------
+Test Passed.
+"github_publication" end time: Oct 12 12:36 UTC
+"github_publication" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/9 Testing: transfer_and_staging
+7/9 Test: transfer_and_staging
+Command: "/home/builder/venv/bin/python3.11" "/home/builder/source/tests/integration/transfer_staging.py" "/home/builder/source/build/linux/transfer_check"
+Directory: /home/builder/source/build/linux
+"transfer_and_staging" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+/usr/lib/python3.11/zipfile.py:1547: UserWarning: Duplicate name: 'Data/base.pak'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+37 HTTP/HTTPS/resume/cancellation/ZIP checks passed
+<end of output>
+Test time =  12.12 sec
+----------------------------------------------------------
+Test Passed.
+"transfer_and_staging" end time: Oct 12 12:36 UTC
+"transfer_and_staging" time elapsed: 00:00:12
+----------------------------------------------------------
+
+8/9 Testing: installer_recovery
+8/9 Test: installer_recovery
+Command: "/home/builder/venv/bin/python3.11" "/home/builder/source/tests/integration/installer_recovery.py" "/home/builder/source/build/linux/installer_check"
+Directory: /home/builder/source/build/linux
+"installer_recovery" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+196 installer assertions/process checks passed; 52 crash boundaries recovered
+<end of output>
+Test time =  14.74 sec
+----------------------------------------------------------
+Test Passed.
+"installer_recovery" end time: Oct 12 12:36 UTC
+"installer_recovery" time elapsed: 00:00:14
+----------------------------------------------------------
+
+9/9 Testing: launcher_lifecycle
+9/9 Test: launcher_lifecycle
+Command: "/home/builder/venv/bin/python3.11" "/home/builder/source/tests/integration/launcher_lifecycle.py" "/home/builder/source/build/linux/lifecycle_check" "/home/builder/source/build/linux/fixture_game" "/home/builder/source/build/linux/OpenBK2Launcher-Linux-x64"
+Directory: /home/builder/source/build/linux
+"launcher_lifecycle" start time: Oct 12 12:36 UTC
+Output:
+----------------------------------------------------------
+10 native command checks; offline Play, language persistence, cwd/argv, process exclusion, shortcut, handoff, collision and GUI install passed
+<end of output>
+Test time =  12.94 sec
+----------------------------------------------------------
+Test Passed.
+"launcher_lifecycle" end time: Oct 12 12:36 UTC
+"launcher_lifecycle" time elapsed: 00:00:12
+----------------------------------------------------------
+
+End testing: Oct 12 12:36 UTC

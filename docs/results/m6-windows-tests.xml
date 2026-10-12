@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="9"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="63"
+	timestamp="2026-10-12T14:36:07"
+	>
+	<testcase name="renderer_smoke" classname="renderer_smoke" time="0.0662798" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="binary_size" classname="binary_size" time="0.025837" status="run">
+		<properties/>
+		<system-out>-- Launcher size: 3258368 bytes
+</system-out>
+	</testcase>
+	<testcase name="core_tests" classname="core_tests" time="0.0066288" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="security_primitives" classname="security_primitives" time="0.0057005" status="run">
+		<properties/>
+		<system-out>38 security assertions passed
+</system-out>
+	</testcase>
+	<testcase name="publisher_and_manifest" classname="publisher_and_manifest" time="1.29426" status="run">
+		<properties/>
+		<system-out>54 cross-language publisher/manifest checks passed
+</system-out>
+	</testcase>
+	<testcase name="github_publication" classname="github_publication" time="0.848468" status="run">
+		<properties/>
+		<system-out>GitHub dry-run, all 21 failure boundaries, immutable assets, replay guards, credential isolation and publication ordering passed
+</system-out>
+	</testcase>
+	<testcase name="transfer_and_staging" classname="transfer_and_staging" time="22.1028" status="run">
+		<properties/>
+		<system-out>C:\Users\adamk\Desktop\OBK2_Launcher\.tools\python\tools\Lib\zipfile\__init__.py:1642: UserWarning: Duplicate name: 'Data/base.pak'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+37 HTTP/HTTPS/resume/cancellation/ZIP checks passed
+</system-out>
+	</testcase>
+	<testcase name="installer_recovery" classname="installer_recovery" time="29.7461" status="run">
+		<properties/>
+		<system-out>198 installer assertions/process checks passed; 52 crash boundaries recovered
+</system-out>
+	</testcase>
+	<testcase name="launcher_lifecycle" classname="launcher_lifecycle" time="9.46139" status="run">
+		<properties/>
+		<system-out>7 native command checks; offline Play, language persistence, cwd/argv, process exclusion, shortcut, handoff, collision and GUI install passed
+</system-out>
+	</testcase>
+</testsuite>

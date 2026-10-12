@@ -1,0 +1,7 @@
+#pragma once
+#include <string_view>
+namespace launcher::build {
+inline constexpr std::string_view manifest_url="@OBK_MANIFEST_URL@";
+inline constexpr std::string_view key_id="@OBK_KEY_ID@";
+inline constexpr std::string_view public_key="@OBK_PUBLIC_KEY_HEX@";
+}

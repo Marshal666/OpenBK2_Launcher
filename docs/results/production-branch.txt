@@ -1,0 +1,1 @@
+Production branch compiled; renderer smoke passed; fixture flag rejected with exit 2. Synthetic trust inputs were used for compile testing only. No production artifact installed.

@@ -1,0 +1,30 @@
+Microsoft (R) COFF/PE Dumper Version 14.51.36257.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file build\windows\MinSizeRel\OpenBK2Launcher-Windows-x64.exe
+
+File Type: EXECUTABLE IMAGE
+
+  Image has the following dependencies:
+
+    KERNEL32.dll
+    USER32.dll
+    GDI32.dll
+    WINMM.dll
+    IMM32.dll
+    ole32.dll
+    VERSION.dll
+    ADVAPI32.dll
+    SETUPAPI.dll
+    SHELL32.dll
+
+  Summary
+
+        C000 .data
+        1000 .fptable
+       10000 .pdata
+       76000 .rdata
+        2000 .reloc
+        1000 .rsrc
+      166000 .text

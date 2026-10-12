@@ -1,0 +1,12 @@
+/build/
+/dist/
+/.dependency-cache/
+/.tools/
+/.venv/
+__pycache__/
+*.pyc
+*.pem
+*.key
+/.fixtures/
+CMakeUserPresets.json
+imgui.ini

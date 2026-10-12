@@ -1,0 +1,7 @@
+{
+  "platform": "linux",
+  "download_bytes": 67109792,
+  "elapsed_download_and_hash_seconds": 0.602,
+  "native_peak_working_set_MiB": 7.426,
+  "scope": "Native core loopback HTTP transfer and SHA-256 of a signed 64 MiB ZIP; excludes Python server/publisher and GUI."
+}

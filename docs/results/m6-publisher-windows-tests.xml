@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="1"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="0"
+	timestamp="2026-10-12T14:42:37"
+	>
+	<testcase name="github_publication" classname="github_publication" time="0.884455" status="run">
+		<properties/>
+		<system-out>GitHub dry-run, all 21 failure boundaries, immutable assets, replay guards, credential isolation and publication ordering passed
+</system-out>
+	</testcase>
+</testsuite>

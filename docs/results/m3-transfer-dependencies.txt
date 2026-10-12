@@ -1,0 +1,28 @@
+Microsoft (R) COFF/PE Dumper Version 14.51.36257.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file build\windows\MinSizeRel\transfer_check.exe
+
+File Type: EXECUTABLE IMAGE
+
+  Image has the following dependencies:
+
+    bcrypt.dll
+    ADVAPI32.dll
+    CRYPT32.dll
+    Secur32.dll
+    WS2_32.dll
+    IPHLPAPI.DLL
+    KERNEL32.dll
+    api-ms-win-core-synch-l1-2-0.dll
+
+  Summary
+
+        4000 .data
+        1000 .fptable
+        9000 .pdata
+       31000 .rdata
+        2000 .reloc
+        1000 .rsrc
+       C2000 .text

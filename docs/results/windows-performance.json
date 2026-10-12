@@ -1,0 +1,9 @@
+{
+  "visible_window_seconds": 0.072,
+  "sample_seconds": 5.0,
+  "idle_cpu_percent_one_core": 1.25,
+  "working_set_MiB": 61.4,
+  "peak_working_set_MiB": 62.05,
+  "binary_bytes": 3258368,
+  "limitations": "Synthetic small installation; native Windows renderer. No physical mouse interaction or large-game startup benchmark."
+}
