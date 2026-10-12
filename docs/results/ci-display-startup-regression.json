@@ -1,0 +1,10 @@
+{
+  "checkout": "/home/runner/work/OpenBK2_Launcher/OpenBK2_Launcher",
+  "original_socket_path_bytes": 125,
+  "wayland_install": "pass",
+  "x11_picker_drag_minimize_close": "pass",
+  "startup_failure_status_and_log": "pass",
+  "failure_seconds": 0.103,
+  "runtime_cleanup_after_failure": "pass",
+  "github_actions_rerun": "not run locally"
+}

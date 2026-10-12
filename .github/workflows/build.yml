@@ -46,6 +46,7 @@ jobs:
           $dumpbinPath = Get-ChildItem -Path "$vsPath\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -Last 1 -ExpandProperty FullName
           python tools/audit_binary.py dist/OpenBK2Launcher-Windows-x64.exe --dumpbin "$dumpbinPath" --out build/ci/binary-audit.json
       - name: Archive fixture artifacts and reports
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: fixture-${{ matrix.os }}

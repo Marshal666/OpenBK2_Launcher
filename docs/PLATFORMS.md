@@ -85,7 +85,18 @@ python tests/integration/windows_performance.py dist/OpenBK2Launcher-Windows-x64
 ```
 
 Use an isolated desktop for input tests. All game/config data are disposable
-workspace fixtures. Captured BMP frames remain under `build/display-artifacts`,
+workspace fixtures. Display sockets use a private, automatically cleaned 0700
+directory under `/tmp`: putting `XDG_RUNTIME_DIR` inside a long CI checkout can
+exceed the Unix socket pathname limit and prevent Weston from starting. The
+display tests report early compositor exits and print log tails on failure;
+CI archives complete logs even when a test fails.
+The CI startup fix was verified on Ubuntu 22.04 at the exact checkout path
+`/home/runner/work/OpenBK2_Launcher/OpenBK2_Launcher`: the old 125-byte socket
+path reproduced Weston's `File name too long` error; the corrected Wayland
+installation and X11 input tests both passed. Early-exit logging and runtime
+cleanup were also checked ([regression results](results/ci-display-startup-regression.json)).
+This local reproduction does not claim a subsequent hosted Actions rerun.
+Captured BMP frames remain under `build/display-artifacts`,
 `build/lifecycle-artifacts` and `build/native-audit`; they are not runtime assets.
 On this Windows automation desktop, SetCursorPos is unavailable, so real mouse
 interaction was exercised on X11 instead. Wayland uses SDL/compositor hit testing;

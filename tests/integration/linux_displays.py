@@ -6,15 +6,18 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from fixture_builder import build_fixtures
 from test_workspace import temporary_workspace
 
 
-def wait_for(predicate, message, seconds=15):
+def wait_for(predicate, message, seconds=15, process=None):
     until = time.monotonic()+seconds
     while time.monotonic() < until:
+        if process is not None and process.poll() is not None:
+            raise AssertionError(f"{message}: process exited with status {process.returncode}")
         value = predicate()
         if value:
             return value
@@ -30,11 +33,13 @@ def main():
     args = parser.parse_args()
     binary, game = args.binary.resolve(), args.game.resolve()
     artifacts = Path(__file__).resolve().parents[2] / "build/display-artifacts"
-    artifacts.mkdir(exist_ok=True)
+    artifacts.mkdir(parents=True, exist_ok=True)
     children = []
-    with temporary_workspace() as temp:
-        runtime = temp / "runtime"
-        runtime.mkdir(mode=0o700)
+    # Wayland's Unix socket pathname must fit in 108 bytes including NUL.
+    # GitHub's checkout path plus our UUID workspace is already too long.
+    # mkdtemp creates a private 0700 directory; explicitly avoid a long TMPDIR.
+    with temporary_workspace() as temp, tempfile.TemporaryDirectory(prefix="obk2-display-", dir="/tmp") as runtime_name:
+        runtime = Path(runtime_name)
         env = dict(os.environ, XDG_RUNTIME_DIR=str(runtime), HOME=str(temp), SDL_VIDEO_DRIVER=args.backend, SDL_RENDER_DRIVER="software")
         logs = []
         def start(command):
@@ -48,12 +53,12 @@ def main():
         try:
             if args.backend == "wayland":
                 env["WAYLAND_DISPLAY"] = "openbk2-test"
-                start(["weston", "--backend=headless-backend.so", "--use-pixman", "--socket=openbk2-test", "--width=1280", "--height=800", "--idle-time=0"])
-                wait_for(lambda: (runtime / "openbk2-test").exists(), "Weston did not create its socket")
+                weston = start(["weston", "--backend=headless-backend.so", "--use-pixman", "--socket=openbk2-test", "--width=1280", "--height=800", "--idle-time=0"])
+                wait_for(lambda: (runtime / "openbk2-test").is_socket(), "Weston did not create its socket", process=weston)
             else:
                 env["DISPLAY"] = ":88"
-                start(["Xvfb", ":88", "-screen", "0", "1280x800x24", "-nolisten", "tcp"])
-                wait_for(lambda: run(["xdotool", "getdisplaygeometry"]).returncode == 0, "Xvfb unavailable")
+                xvfb = start(["Xvfb", ":88", "-screen", "0", "1280x800x24", "-nolisten", "tcp"])
+                wait_for(lambda: run(["xdotool", "getdisplaygeometry"]).returncode == 0, "Xvfb unavailable", process=xvfb)
                 start(["openbox", "--sm-disable"])
                 time.sleep(.5)
             public = build_fixtures(temp / "fixtures", native_game=game).public_key().public_bytes_raw().hex()
@@ -125,6 +130,14 @@ def main():
             (artifacts / (args.backend+"-results.json")).write_text(json.dumps(report, indent=2)+"\n")
             print(json.dumps(report))
         except Exception:
+            for log in logs:
+                log.flush()
+                # Keep console diagnostics bounded; archive the complete log.
+                with Path(log.name).open("rb") as stream:
+                    stream.seek(0, os.SEEK_END)
+                    stream.seek(max(0, stream.tell()-16384))
+                    tail = stream.read().decode("utf-8", errors="replace")
+                print(f"--- {Path(log.name).name} ---\n{tail}", file=sys.stderr, flush=True)
             if args.backend == "x11":
                 print(run(["xdotool", "search", "--onlyvisible", "--name", ".", "getwindowname", "%@"]).stdout, flush=True)
                 try:
