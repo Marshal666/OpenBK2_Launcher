@@ -14,6 +14,7 @@
 #include <tlhelp32.h>
 #include <windows.h>
 #else
+#include "../assets/launcher_icon.hpp"
 #include <cerrno>
 #include <csignal>
 #include <fcntl.h>
@@ -71,6 +72,34 @@ fs::path home_directory() {
     if (!value || !fs::path(value).is_absolute())
         fail(ErrorCategory::Filesystem, "HOME is unavailable");
     return value;
+}
+std::string desktop_icon_path(const fs::path &path) {
+    // Icon is an iconstring, not an Exec argument: escape desktop-entry values
+    // without shell quotes or percent field-code expansion.
+    std::string result;
+    for (char c : path_utf8(path)) {
+        switch (c) {
+        case '\\':
+            result += "\\\\";
+            break;
+        case ' ':
+            result += "\\s";
+            break;
+        case '\n':
+            result += "\\n";
+            break;
+        case '\r':
+            result += "\\r";
+            break;
+        case '\t':
+            result += "\\t";
+            break;
+        default:
+            result += c;
+            break;
+        }
+    }
+    return result;
 }
 #endif
 } // namespace
@@ -162,6 +191,7 @@ void create_desktop_shortcut(const fs::path &executable, const fs::path &desktop
         std::unique_ptr<IShellLinkW, void (*)(IShellLinkW *)>(raw, [](auto *p) { p->Release(); });
     if (FAILED(link->SetPath(executable.c_str())) ||
         FAILED(link->SetWorkingDirectory(executable.parent_path().c_str())) ||
+        FAILED(link->SetIconLocation(executable.c_str(), 0)) ||
         FAILED(link->SetDescription(L"OpenBK2 Launcher")))
         fail(ErrorCategory::Filesystem, "Cannot configure shortcut");
     IPersistFile *persist_raw = nullptr;
@@ -174,12 +204,19 @@ void create_desktop_shortcut(const fs::path &executable, const fs::path &desktop
         fail(ErrorCategory::Filesystem, "Cannot write shortcut");
     root.rename(temp, "OpenBK2 Launcher.lnk", true);
 #else
+    const char *data_home = std::getenv("XDG_DATA_HOME");
+    const auto data = data_home && fs::path(data_home).is_absolute() ? fs::path(data_home)
+                                                                     : home_directory() / ".local/share";
+    SafeRoot icons(data / "openbk2-launcher", true);
+    icons.write_atomic("icon.png", {reinterpret_cast<const char *>(art::icon::png), sizeof(art::icon::png)});
     // GLib 2.72 checks the executable before expanding %% field escapes. Use
     // the native env utility as argv[0], with the final launcher as a quoted
     // argument. This invokes no shell and preserves literal percent characters.
     const auto contents = "[Desktop Entry]\nType=Application\nName=OpenBK2 Launcher\nComment=Install, update "
                           "and play OpenBK2\nExec=/usr/bin/env -- " +
-                          desktop_exec_quote(path_utf8(executable)) + "\nTerminal=false\nCategories=Game;\n";
+                          desktop_exec_quote(path_utf8(executable)) +
+                          "\nIcon=" + desktop_icon_path(icons.path() / "icon.png") +
+                          "\nTerminal=false\nCategories=Game;\n";
     root.write_atomic("openbk2-launcher.desktop", contents);
     auto file = root.open("openbk2-launcher.desktop", FileMode::Append);
     file.set_executable(true);

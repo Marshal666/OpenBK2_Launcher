@@ -1,0 +1,2 @@
+# Only needed to regenerate the checked-in assets after replacing res/main.png.
+Pillow==12.3.0

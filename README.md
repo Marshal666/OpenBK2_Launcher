@@ -51,6 +51,22 @@ SHA-256. Offline source names are `SDL`, `IMGUI_SOURCE`, `YYJSON_SOURCE`,
 sources. Application libraries link statically; Linux retains system runtime and
 graphical dependencies. Every build enforces the 15 MiB hard limit.
 
+The launcher icon comes from `res/main.png`. Its Windows ICO and embedded pixel/PNG
+data are checked in, so normal builds need no image tools. After replacing the
+source image, regenerate them with:
+
+```text
+python -m pip install -r tools/requirements-icons.txt
+python tools/create_icon.py
+```
+
+Windows uses this icon for the executable, application window and shortcuts.
+When creating a Linux desktop shortcut, the launcher writes its embedded PNG to
+`$XDG_DATA_HOME/openbk2-launcher/icon.png` (default
+`~/.local/share/openbk2-launcher/icon.png`) and references it in the desktop entry.
+The icon remains available when the launcher relocates. Existing shortcuts can
+be refreshed using **Settings → Create desktop shortcut**.
+
 ## Run a signed fixture
 
 For a one-command isolated demo with relocation/shortcuts initially disabled:

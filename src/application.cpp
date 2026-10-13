@@ -1,5 +1,6 @@
 #include "launcher/application.hpp"
 #include "../assets/hero.hpp"
+#include "../assets/launcher_icon.hpp"
 #include "font.hpp"
 #include "launcher/window_layout.hpp"
 #include "window_shape.hpp"
@@ -155,7 +156,13 @@ int run_application(const ApplicationOptions &options) {
                                           const_cast<std::uint32_t *>(art::hero.data()), art::width * 4),
                     SDL_DestroySurface);
     require(bool(artwork), "Embedded artwork");
-    SDL_SetWindowIcon(window.get(), artwork.get());
+    Surface icon(SDL_CreateSurfaceFrom(art::icon::width, art::icon::height, SDL_PIXELFORMAT_RGBA32,
+                                       const_cast<unsigned char *>(art::icon::rgba), art::icon::width * 4),
+                 SDL_DestroySurface);
+    require(bool(icon), "Embedded launcher icon");
+    // Some compositors do not support setting a window icon; the desktop entry
+    // also supplies it on Linux.
+    SDL_SetWindowIcon(window.get(), icon.get());
     Texture hero(SDL_CreateTextureFromSurface(renderer.get(), artwork.get()), SDL_DestroyTexture);
     require(bool(hero), "Upload artwork");
     SDL_SetTextureScaleMode(hero.get(), SDL_SCALEMODE_LINEAR);

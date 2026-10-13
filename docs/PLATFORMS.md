@@ -21,18 +21,18 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 3,305,472 | 3.152 | `a13a9cdafc134bba0166ad244b94936d11104e9a37ee3031bc54ab13cefc1b6b` |
-| `OpenBK2Launcher-Linux-x64` | 8,073,648 | 7.700 | `f810d85bcfc21ff8cf1086950a18a8296561c7d36bacf2d715ddf2ff3fbeb7e2` |
+| `OpenBK2Launcher-Windows-x64.exe` | 3,336,704 | 3.182 | `d75e9d1b104f1a8471292cc3f50edd7eea91db20242c730606b077c5c2165417` |
+| `OpenBK2Launcher-Linux-x64` | 8,090,032 | 7.715 | `daa892b54e8cfb7d1128bb44c040ce99f7594f68e302335ff182e9527a81ab49` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/gui-polish-windows-binary-audit.json) and
-[Linux audit](results/gui-polish-linux-binary-audit.json). Application dependencies and
+[Windows audit](results/icon-windows-binary-audit.json) and
+[Linux audit](results/icon-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,
 IPHLPAPI, KERNEL32, USER32, GDI32, WINMM, IMM32, ole32, VERSION, ADVAPI32,
 SETUPAPI, SHELL32 and the synchronization API set mentioned above.
-[Exact imports](results/gui-polish-windows-binary-audit.imports.txt).
+[Exact imports](results/icon-windows-binary-audit.imports.txt).
 
 Linux ELF dependencies are `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`,
 `libc.so.6` and the normal ELF loader. Highest required glibc symbol is **2.34**;
@@ -41,7 +41,7 @@ the tested distribution remains Ubuntu 22.04, not every distribution with glibc
 static. Native folder picking requires a supported desktop portal or installed
 dialog utility (Zenity was tested). `/usr/bin/env` supports desktop shortcut
 execution. TLS uses statically linked Ubuntu OpenSSL with the system CA store.
-[Imports](results/gui-polish-linux-binary-audit.imports.txt),
+[Imports](results/icon-linux-binary-audit.imports.txt),
 [symbol versions](results/linux-symbol-versions.txt),
 [actual toolchain](results/linux-toolchain.txt).
 
@@ -61,7 +61,7 @@ display checks. Settings starts at 900 by 560 logical units, bounded by the
 available window size. Settings and Mods retain their resized dimensions during
 the current launcher session. Closing the launcher resets these dimensions.
 
-Both native builds passed the three relevant CTest checks (`renderer_smoke`,
+The window-update builds passed the three relevant CTest checks (`renderer_smoke`,
 `binary_size`, `launcher_lifecycle`): Windows in 12.91 seconds and Linux in
 15.00 seconds. The full 10-test results above are from the preceding shared-data
 and mods revision; the updater and publisher were unchanged by this GUI update.
@@ -78,6 +78,25 @@ the center remains included. Windows mouse-driven resizing could not be tested
 reliably on the automation desktop; it was exercised through the same ImGui code
 on X11. Wayland pointer interactions and mixed-DPI monitor transitions remain
 unverified.
+
+## Launcher icon update
+
+The current artifacts use the supplied `res/main.png`. Windows embeds six ICO
+sizes (16, 20, 24, 32, 40 and 48 pixels); the application window uses its decoded
+RGBA pixels. Linux desktop shortcuts reference the embedded PNG copied into the
+user's application-data folder. No image decoder or additional runtime library
+was added. See the [regeneration instructions](../README.md#build-and-test).
+
+Both builds again passed `renderer_smoke`, `binary_size` and `launcher_lifecycle`
+(Windows: 13.05 seconds; Linux: 15.18 seconds). Native Windows resource inspection
+confirmed every embedded ICO image matches the generated asset, and the `.lnk`
+icon location points to executable icon index 0. On Linux, GLib parsed the actual
+desktop entry and resolved an exact copy of the source PNG, including data paths
+with spaces, Unicode, backslashes and control-character escapes. A relative
+`XDG_DATA_HOME` correctly used the home-directory fallback. X11's actual
+`_NET_WM_ICON` property matched all 48 by 48 pixels and their alpha values.
+The Wayland rendering/install check also passed; visual icon presentation in
+individual Wayland desktop shells was not tested.
 
 ## Measurements
 

@@ -42,7 +42,8 @@ def main():
         run(driver, "spawn", executable, root / "bin", *arguments, cwd=temp)
         assert (root / "bin/fixture-run.txt").read_text(encoding="utf-8").splitlines()[3:] == arguments
         desktop = temp / "Desktop"
-        run(driver, "shortcut", gui, desktop)
+        shortcut_env = dict(os.environ, XDG_DATA_HOME=str(temp / "shortcut-data"))
+        run(driver, "shortcut", gui, desktop, env=shortcut_env)
         shortcut = desktop / ("OpenBK2 Launcher.lnk" if os.name == "nt" else "openbk2-launcher.desktop")
         assert shortcut.stat().st_size > 30
         if os.name != "nt":
@@ -52,7 +53,7 @@ def main():
             tricky.parent.mkdir()
             shutil.copy2(game, tricky)
             escaped_desktop = temp / "escaped-desktop"
-            run(driver, "shortcut", tricky, escaped_desktop)
+            run(driver, "shortcut", tricky, escaped_desktop, env=shortcut_env)
             gio = shutil.which("gio")
             assert gio, "Install libglib2.0-bin for native .desktop parsing tests"
             run(gio, "launch", escaped_desktop / "openbk2-launcher.desktop", cwd=temp)
