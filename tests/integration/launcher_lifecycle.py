@@ -10,6 +10,7 @@ import time
 import threading
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from fixture_builder import build_fixtures
+from shared_fixtures import build_shared_fixtures
 from test_workspace import temporary_workspace
 
 
@@ -23,9 +24,26 @@ def main():
         checks += 1
         return result
     with temporary_workspace() as temp:
+        path_examples = (
+            [(r"C:\Users\Example\Games/OpenBK2", "C:/Users/Example/Games/OpenBK2"),
+             ("C:\\Games\\Žluťoučký", "C:/Games/Žluťoučký"),
+             (r"\\server\share\Game folder", "//server/share/Game folder")]
+            if os.name == "nt" else
+            [("/home/example/Games/Žluťoučký", "/home/example/Games/Žluťoučký"),
+             (r"/home/example/Game\folder", r"/home/example/Game\folder")]
+        )
+        for supplied, expected in path_examples:
+            assert run(driver, "path-text", supplied).stdout.rstrip("\n") == expected
         key = build_fixtures(temp / "fixtures", native_game=game).public_key().public_bytes_raw().hex()
         release = temp / "fixtures/release-1"
         root, config = temp / "Game with spaces Žluťoučký", temp / "config"
+        # Existing Windows settings with native separators must still load and
+        # be saved back with forward slashes without changing the selected root.
+        config.mkdir()
+        (config / "settings.json").write_text(json.dumps({
+            "settings_schema_version": 1, "installation_root": str(root),
+            "requested_language": "en", "configured": False, "relocate": False, "shortcut": False,
+        }), encoding="utf-8")
         run(driver, "online", config, root, release, key)
         assert (root / "Data/texts-de.pak").exists() and not (root / "Data/texts-en.pak").exists()
         run(driver, "offline", config, root, release, key)
@@ -35,13 +53,15 @@ def main():
             assert record[1:3] == ["SDL3", str(root / "bin")]
         config_json = json.loads((config / "settings.json").read_text(encoding="utf-8"))
         assert config_json["requested_language"] == "de"
+        assert config_json["installation_root"] == root.as_posix()
         # Verify native argument quoting without a shell and run from an unrelated cwd.
         arguments = ["two words", 'a"quoted"value', "ends\\", "Žluťoučký", "$(not-a-shell)"]
         executable = root / "bin" / ("Game.exe" if os.name == "nt" else "Game")
         run(driver, "spawn", executable, root / "bin", *arguments, cwd=temp)
         assert (root / "bin/fixture-run.txt").read_text(encoding="utf-8").splitlines()[3:] == arguments
         desktop = temp / "Desktop"
-        run(driver, "shortcut", gui, desktop)
+        shortcut_env = dict(os.environ, XDG_DATA_HOME=str(temp / "shortcut-data"))
+        run(driver, "shortcut", gui, desktop, env=shortcut_env)
         shortcut = desktop / ("OpenBK2 Launcher.lnk" if os.name == "nt" else "openbk2-launcher.desktop")
         assert shortcut.stat().st_size > 30
         if os.name != "nt":
@@ -51,7 +71,7 @@ def main():
             tricky.parent.mkdir()
             shutil.copy2(game, tricky)
             escaped_desktop = temp / "escaped-desktop"
-            run(driver, "shortcut", tricky, escaped_desktop)
+            run(driver, "shortcut", tricky, escaped_desktop, env=shortcut_env)
             gio = shutil.which("gio")
             assert gio, "Install libglib2.0-bin for native .desktop parsing tests"
             run(gio, "launch", escaped_desktop / "openbk2-launcher.desktop", cwd=temp)
@@ -127,6 +147,22 @@ def main():
         artifacts.mkdir(exist_ok=True)
         shutil.copyfile(capture, artifacts / "installed.bmp")
         shutil.copyfile(progress_capture, artifacts / "progress.bmp")
+        # Real controller + HTTP transfers + process exclusion for optional mods.
+        mod_key, mod_releases = build_shared_fixtures(temp / "shared-fixtures", game=game, count=1, hold_game=True)
+        release = mod_releases[0]
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            run(driver, "mods", temp / "mods-config", temp / "mods-game", release,
+                mod_key.public_key().public_bytes_raw().hex(), f"http://127.0.0.1:{server.server_port}")
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+        retained = list((temp / "mods-game/.launcher/backups/removed-mods").glob("*/Alpha/user.cfg"))
+        assert len(retained) == 1 and retained[0].read_text() == "player edit"
+        assert (temp / "mods-game/MODs/Beta/readme.txt").exists()
     print(f"{checks} native command checks; offline Play, language persistence, cwd/argv, process exclusion, shortcut, handoff, collision and GUI install passed")
 
 

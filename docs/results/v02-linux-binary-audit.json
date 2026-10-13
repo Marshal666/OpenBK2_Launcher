@@ -1,0 +1,14 @@
+{
+  "binary": "OpenBK2Launcher-Linux-x64",
+  "bytes": 8073648,
+  "MiB": 7.7,
+  "within_10_MiB_target": true,
+  "sha256": "1b895bd31b26a58126937696028133503171d9107d06e80ee17a7687adbb21ba",
+  "os_libraries": [
+    "libstdc++.so.6",
+    "libm.so.6",
+    "libgcc_s.so.1",
+    "libc.so.6"
+  ],
+  "maximum_glibc": "2.34"
+}

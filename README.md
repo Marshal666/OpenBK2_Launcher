@@ -2,14 +2,22 @@
 
 Independent MIT-licensed C++20/CMake launcher and Python release toolkit. Installs,
 updates, repairs and launches signed game releases; preserves user files; supports
-offline Play, managed language switching and interrupted-update recovery. The GUI
-uses SDL3 and Dear ImGui. No game code or game assets are included.
+offline Play, managed language switching and interrupted-update recovery. Shared
+game data is packaged once for both platforms. An experimental Mods panel downloads
+signed optional mods and removes them into recoverable backups. The GUI
+uses SDL3 and Dear ImGui. No game code or playable game data is included.
 
 Native Windows and Ubuntu 22.04 builds and fixture suites have been exercised.
 See [milestone reports](docs/MILESTONES.md), [acceptance results](docs/ACCEPTANCE.md)
-and [platform limitations](docs/PLATFORMS.md). The delivered executables are
+and [shared-data/mod results](docs/SHARED_DATA_AND_MODS.md), with
+[platform limitations](docs/PLATFORMS.md). The delivered executables are
 **fixture/development builds**. Production requires your HTTPS manifest endpoint
 and public verification key; no production trust values or private keys are bundled.
+
+**Settings** opens in the main content area. **Back to launcher** returns without
+saving edits; **Save** saves the preferences and returns. Installation and repair
+actions return to the main screen to show progress. The first-run setup uses the
+same page, and the window controls remain available in the header.
 
 ## Build and test
 
@@ -47,6 +55,31 @@ SHA-256. Offline source names are `SDL`, `IMGUI_SOURCE`, `YYJSON_SOURCE`,
 `FETCHCONTENT_SOURCE_DIR_` for its CMake override. Point to the exact extracted
 sources. Application libraries link statically; Linux retains system runtime and
 graphical dependencies. Every build enforces the 15 MiB hard limit.
+
+The launcher icon comes from `res/main.png`. Its Windows ICO and embedded pixel/PNG
+data are checked in, so normal builds need no image tools. After replacing the
+source image, regenerate them with:
+
+```text
+python -m pip install -r tools/requirements-icons.txt
+python tools/create_icon.py
+```
+
+Windows uses this icon for the executable, application window and shortcuts.
+When creating a Linux desktop shortcut, the launcher writes its embedded PNG to
+`$XDG_DATA_HOME/openbk2-launcher/icon.png` (default
+`~/.local/share/openbk2-launcher/icon.png`) and references it in the desktop entry.
+The icon remains available when the launcher relocates. Existing shortcuts can
+be refreshed using **Settings → Create desktop shortcut**.
+
+The main artwork comes from `res/launcher_image.png`. After replacing it, use the
+same Pillow dependency above and run `python tools/create_artwork.py`. This writes
+`assets/hero.bmp`, which CMake embeds into the executable and SDL decodes directly.
+The original resolution and pixels are retained; no external image file or extra
+runtime image library is needed. The main view scales the image uniformly to fill
+roughly 90% of the area below the header, cropping excess edges around the center.
+Its title and installation status overlay the image. Play and Install/Update sit
+in the bottom-right action strip, alongside launcher and installed-game versions.
 
 ## Run a signed fixture
 
@@ -94,6 +127,18 @@ pending until verified commit succeeds. Repair and reinstall preserve unknown
 files and back up modifications to managed files. A missing configured root asks
 for reselection. Do not remove `.launcher/transaction.json` or its staging/backups
 during recovery; see the [recovery protocol](docs/UPDATE_PROTOCOL.md).
+
+The default game folder is `~/Games/OpenBK2`: usually
+`C:/Users/<user>/Games/OpenBK2` on Windows and `/home/<user>/Games/OpenBK2` on Linux.
+You can choose another folder in Settings. A writable folder is required for
+installing, updating, managing mods and acquiring the Play lock. Windows Program
+Files is normally protected, so it is not the default; the launcher does not
+request administrator elevation.
+
+Displayed and saved paths use forward slashes. Windows folder input also converts
+typed or pasted backslashes, and older settings remain readable. Native Windows
+API calls retain the platform's required path format. On Linux, backslashes that
+are part of a filename are preserved, since only `/` separates directories.
 
 Settings/logs live under `%LOCALAPPDATA%/OpenBK2Launcher` or
 `$XDG_CONFIG_HOME/openbk2-launcher` (fallback `~/.config/openbk2-launcher`). Logs

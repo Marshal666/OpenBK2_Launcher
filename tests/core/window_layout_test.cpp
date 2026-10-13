@@ -12,6 +12,7 @@ int main() {
     };
     const auto normal = launcher::window_layout(1000, 600, 1);
     check(normal.draggable(300, 24), "blank title bar must drag");
+    check(!normal.draggable(660, 24), "mods must receive clicks");
     check(!normal.draggable(920, 24), "minimize must receive clicks");
     check(!normal.draggable(980, 24), "close must receive clicks");
     check(!normal.draggable(300, 52), "hero must not drag");

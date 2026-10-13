@@ -1,6 +1,10 @@
 #pragma once
 #include <string_view>
+#include <array>
 namespace launcher::build {
+inline constexpr std::string_view version="@PROJECT_VERSION@";
+inline constexpr std::string_view user_agent="OpenBK2Launcher/@PROJECT_VERSION@";
+inline constexpr std::array<unsigned long, 3> version_parts{@PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@};
 inline constexpr std::string_view manifest_url="@OBK_MANIFEST_URL@";
 inline constexpr std::string_view key_id="@OBK_KEY_ID@";
 inline constexpr std::string_view public_key="@OBK_PUBLIC_KEY_HEX@";

@@ -15,11 +15,17 @@ Game files never write into launcher metadata or replace the launcher itself.
 Traversal, drive/UNC paths, reserved names, aliases, duplicate entries and
 links/special files are rejected. Handle-based operations pin directories and
 check regular leaves; extraction uses new files in staging on the game volume.
-`MODs/` and `Profiles/` require exact signed file opt-ins; all other entries are
-user-owned. Modified and conflicting originals are backed up before replacement.
+Base-game ownership under `MODs/` and `Profiles/` requires exact signed file
+opt-ins; all other entries are user-owned. Optional downloads use a signed v2
+mod catalog scoped strictly to one `MODs/<id>/` folder, with no base-game overlap.
+Archives and extracted bytes are verified before atomic folder publication.
+Mods remain editable afterward, outside base-game integrity checks. Explicit
+Remove actions move complete folders into recoverable backups; they do not
+delete user files or grant an unsigned receipt authority over game data.
+Modified and conflicting base originals are backed up before replacement.
 Deletion requires an authenticated prior inventory, not merely editable state.
 
-An OS writer lock covers recovery and updates. A durable journal plus signed
+An OS writer lock covers recovery, updates and mod operations. A durable journal plus signed
 inventories and verified backups supports repeatable commit or rollback. Play
 requires complete signed local state, matching files and no pending transaction.
 Cancellation is deferred during commit. Linux executable modes are restored;

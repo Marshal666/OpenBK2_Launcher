@@ -1,4 +1,5 @@
 #include "launcher/manifest.hpp"
+#include "build_config.hpp"
 #include "json.hpp"
 #include "launcher/error.hpp"
 #include "launcher/sha256.hpp"
@@ -170,8 +171,14 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
     m.envelope = envelope;
     auto body = parse(m.payload, 12 * 1024 * 1024);
     root = yyjson_doc_get_root(body.get());
-    fields(root, {"schema_version", "release", "min_launcher_version", "packages", "platforms", "languages"});
-    require(number(get(root, "schema_version")) == 1, "Unsupported manifest schema");
+    const auto schema = number(get(root, "schema_version"));
+    require(schema == 1 || schema == 2, "Unsupported manifest schema");
+    if (schema == 2)
+        fields(root, {"schema_version", "release", "min_launcher_version", "packages", "platforms",
+                      "languages", "mods"});
+    else
+        fields(root,
+               {"schema_version", "release", "min_launcher_version", "packages", "platforms", "languages"});
     auto release = get(root, "release");
     fields(release, {"version", "sequence", "created_utc"});
     m.version = string(get(release, "version"));
@@ -188,8 +195,10 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
         "Invalid minimum launcher version");
     const std::array<unsigned long, 3> required_version{
         std::stoul(minimum_parts[1]), std::stoul(minimum_parts[2]), std::stoul(minimum_parts[3])};
-    require(required_version <= std::array<unsigned long, 3>{0, 1, 0},
+    require(required_version <= build::version_parts,
             "This release requires a newer launcher; update manually");
+    require(schema == 1 || required_version >= std::array<unsigned long, 3>{0, 2, 0},
+            "Schema v2 requires launcher 0.2.0");
     for (auto item : array(get(root, "packages"))) {
         fields(item, {"id", "kind", "platform", "url", "size", "unpacked_size", "sha256", "files"});
         PackageRecord p;
@@ -200,9 +209,13 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
         p.size = number(get(item, "size"));
         p.unpacked_size = number(get(item, "unpacked_size"));
         p.sha256 = digest(get(item, "sha256"));
-        require(p.kind == "snapshot" || p.kind == "patch" || p.kind == "language", "Unknown package kind");
-        require((p.kind == "language" && p.platform == "any") ||
-                    (p.kind != "language" && (p.platform == "windows-x64" || p.platform == "linux-x64")),
+        require(p.kind == "snapshot" || p.kind == "patch" || p.kind == "language" ||
+                    (schema == 2 && p.kind == "mod"),
+                "Unknown package kind");
+        require(((p.kind == "language" || p.kind == "mod") && p.platform == "any") ||
+                    ((p.kind == "snapshot" || p.kind == "patch") &&
+                     (p.platform == "windows-x64" || p.platform == "linux-x64" ||
+                      (schema == 2 && p.platform == "any"))),
                 "Invalid package platform");
         require(safe_url(p.url, policy), "Unsafe package URL");
         require(p.size > 0 && p.size <= package_limit && p.unpacked_size <= unpack_limit,
@@ -223,7 +236,10 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
                        const std::string &platform) -> const PackageRecord & {
         const auto it = m.packages.find(id);
         require(it != m.packages.end(), "Unknown package reference");
-        require(it->second.kind == kind && it->second.platform == platform, "Package membership mismatch");
+        require(it->second.kind == kind && (it->second.platform == platform ||
+                                            (schema == 2 && (kind == "snapshot" || kind == "patch") &&
+                                             it->second.platform == "any")),
+                "Package membership mismatch");
         used.insert(id);
         return it->second;
     };
@@ -330,6 +346,44 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
         m.languages.emplace(locale, std::move(l));
     }
     require(!m.languages.empty() && m.languages.size() <= 64, "Invalid language count");
+    if (schema == 2) {
+        Paths mod_names;
+        for (const auto &[id, v] : object(get(root, "mods"))) {
+            require(matches(id, "[A-Za-z0-9][A-Za-z0-9_-]{0,63}"), "Invalid mod identifier");
+            mod_names.add(id);
+            fields(v, {"label", "files", "package_ids"});
+            ModRecord mod{string(get(v, "label")), inventory(get(v, "files"), true),
+                          ids(get(v, "package_ids"))};
+            require(!mod.label.empty() && mod.label.size() <= 128 && !mod.files.empty(),
+                    "Invalid mod description or files");
+            Inventory packaged;
+            for (const auto &pid : mod.packages)
+                for (const auto &[path, f] : package(pid, "mod", "any").files)
+                    require(packaged.emplace(path, f).second, "Overlapping mod packages");
+            require(packaged.size() == mod.files.size(), "Mod package coverage mismatch");
+            std::uint64_t total = 0;
+            for (const auto &[path, f] : mod.files) {
+                require(path.starts_with("MODs/" + id + "/"), "Mod file outside its folder");
+                validate_game_path(path, {path});
+                require(packaged.contains(path) && same_bytes(packaged.at(path), f),
+                        "Mod package bytes mismatch");
+                require(f.size <= 64ull * 1024 * 1024 * 1024 - total, "Mod size limit exceeded");
+                total += f.size;
+            }
+            for (const auto &[platform, target] : m.platforms) {
+                (void)platform;
+                const auto prefix = path_key("MODs/" + id);
+                for (const auto &[path, f] : target.files) {
+                    (void)f;
+                    const auto key = path_key(path);
+                    require(key != prefix && !key.starts_with(prefix + "/") && !prefix.starts_with(key + "/"),
+                            "Optional mod overlaps base game");
+                }
+            }
+            m.mods.emplace(id, std::move(mod));
+        }
+        require(m.mods.size() <= 256, "Too many mods");
+    }
     require(used.size() == m.packages.size(), "Unreferenced packages");
     return m;
 }

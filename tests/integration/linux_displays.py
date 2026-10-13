@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
-from fixture_builder import build_fixtures
+from shared_fixtures import build_shared_fixtures
 from test_workspace import temporary_workspace
 
 
@@ -61,7 +61,8 @@ def main():
                 wait_for(lambda: run(["xdotool", "getdisplaygeometry"]).returncode == 0, "Xvfb unavailable", process=xvfb)
                 start(["openbox", "--sm-disable"])
                 time.sleep(.5)
-            public = build_fixtures(temp / "fixtures", native_game=game).public_key().public_bytes_raw().hex()
+            private, _ = build_shared_fixtures(temp / "fixtures", game=game, count=1)
+            public = private.public_key().public_bytes_raw().hex()
             common = [binary, "--fixture-release", temp / "fixtures/release-1", "--fixture-public-key", public]
             result = run(common + ["--auto-install", "--config-dir", temp / "config", "--root", temp / "game",
                                    "--capture", artifacts / (args.backend+"-installed.bmp")])
@@ -94,7 +95,7 @@ def main():
                     time.sleep(.2)
                 time.sleep(.5)
                 # 1000x600 logical layout; captured setup frame documents these coordinates.
-                click(735, 174)
+                click(882, 147)
                 picker = wait_for(lambda: window("Select|Choose|Open Directory|File Selection|zenity"), "Native folder picker did not open")
                 run(["xdotool", "windowactivate", "--sync", picker], check=True)
                 run(["xdotool", "key", "ctrl+l"], check=True)
@@ -104,7 +105,7 @@ def main():
                 run(["xdotool", "key", "Return"], check=True)
                 wait_for(lambda: window("Select|Choose|Open Directory|File Selection|zenity") is None, "Folder picker did not close")
                 time.sleep(.3)
-                click(195, 510)  # Save the selected folder; check the callback's result on disk.
+                click(60, 393)  # Save the selected folder; check the callback's result on disk.
                 wait_for(lambda: json.loads((config / "settings.json").read_text())["installation_root"] == str(selected), "Folder callback did not persist selection")
                 report["native_folder_picker_callback"] = "pass"
                 # Verify blank-title drag while buttons still receive normal pointer input.
@@ -120,13 +121,32 @@ def main():
                 after = geometry()
                 assert (before["X"], before["Y"]) != (after["X"], after["Y"]), (before, after)
                 report["title_drag"] = "pass"
-                click(900, 24)
+                click(after["WIDTH"] - 60, 24)  # Circular Minimize, anchored to the right edge.
                 wait_for(lambda: window("^OpenBK2 Launcher$") is None, "Minimize button failed")
                 run(["xdotool", "windowmap", hwnd, "windowactivate", "--sync", hwnd], check=True)
                 time.sleep(.3)
-                click(955, 24)
+                click(after["WIDTH"] - 24, 24)  # Circular Close.
                 assert process.wait(timeout=10) == 0
                 report["minimize_restore_close"] = "pass"
+                # Exercise the actual Mods controls against signed optional assets.
+                process = start(common + ["--config-dir", temp / "config", "--root", temp / "game"])
+                hwnd = wait_for(lambda: window("^OpenBK2 Launcher$"), "Installed launcher unavailable")
+                time.sleep(.8)
+                click(660, 24)
+                click(350, 230)  # Alpha Download; verified by files, not a UI-only state.
+                active = temp / "game/MODs/Alpha"
+                wait_for(lambda: (active / "assets/2.pak").exists(), "Mod Download control did not install Alpha")
+                (active / "user.cfg").write_bytes(b"preserved player edits")
+                time.sleep(.5)
+                click(285, 172)  # Installed Alpha / Remove.
+                time.sleep(.3)
+                click(310, 343)  # Confirm recoverable removal.
+                wait_for(lambda: not active.exists(), "Mod Remove control did not remove Alpha")
+                backups = list((temp / "game/.launcher/backups/removed-mods").glob("*/Alpha/user.cfg"))
+                assert len(backups) == 1 and backups[0].read_bytes() == b"preserved player edits"
+                report["mod_download_remove_preserves_edits"] = "pass"
+                process.terminate()
+                process.wait(timeout=10)
             (artifacts / (args.backend+"-results.json")).write_text(json.dumps(report, indent=2)+"\n")
             print(json.dumps(report))
         except Exception:

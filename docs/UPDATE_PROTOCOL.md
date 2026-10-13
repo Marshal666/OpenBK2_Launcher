@@ -61,3 +61,31 @@ Empty directories can remain. Backups from interrupted preparation are retained
 conservatively because they can contain user changes; the 8 GiB quota and
 free-space checks stop further writes if manual archiving is needed. No game
 directory or preserved user backup is recursively deleted.
+
+## Optional mod folder operations
+
+`ModManager` holds the same installation writer lock and rejects an active game
+process or pending base-game recovery. Download authenticates the catalog,
+requires the installed game release to match, verifies base integrity, and checks
+that no mod folder is present. It preflights download/staging space, downloads
+only the selected mod's packages, verifies their full ZIP/file inventories, and
+flushes the staged files with their signed executable modes. It rechecks that
+the game is closed and `MODs` is empty before publishing the staged mod folder
+with a single atomic, no-replace directory rename. Cancellation is honored until
+that rename; partial downloads never appear as a live mod. Startup recovery
+reclaims abandoned mod staging using the existing reserved-staging policy.
+
+Remove validates the selected direct child of `MODs`, rejects base-owned folders,
+links, hardlinks and unsafe paths, then moves the whole directory atomically to
+`.launcher/backups/removed-mods/<unique-id>/<id>`. There is no per-file removal or
+automatic backup purge. Existing content at a rename destination is never replaced.
+The UI confirms this recoverable move before invoking it. Base-game updates and
+repairs leave optional mods untracked, preserving their edits and extra files.
+
+The folder commit uses Linux `renameat2(RENAME_NOREPLACE)` plus parent-directory
+`fsync`, or Windows `SetFileInformationByHandle(FileRenameInfo)` with replacement
+disabled and pinned parents. A separate multi-file journal is unnecessary because
+each operation has one atomic live change. Process-termination tests cover both
+sides of publication and removal. Physical power-loss behavior has not been tested.
+External programs that edit the installation without honoring the launcher lock
+can still race an operation; unexpected destination folders cause a safe failure.

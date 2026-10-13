@@ -1,0 +1,2 @@
+# Only needed to regenerate icons or artwork after replacing the PNGs in res/.
+Pillow==12.3.0

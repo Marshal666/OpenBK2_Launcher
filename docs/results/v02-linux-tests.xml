@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Linux-c++"
+	tests="10"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="openbk2-build"
+	time="40"
+	timestamp="2026-10-13T10:54:37"
+	>
+	<testcase name="renderer_smoke" classname="renderer_smoke" time="0.0598836" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="binary_size" classname="binary_size" time="0.00263732" status="run">
+		<properties/>
+		<system-out>-- Launcher size: 8073648 bytes
+</system-out>
+	</testcase>
+	<testcase name="core_tests" classname="core_tests" time="0.00138771" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="security_primitives" classname="security_primitives" time="0.00177152" status="run">
+		<properties/>
+		<system-out>38 security assertions passed
+</system-out>
+	</testcase>
+	<testcase name="publisher_and_manifest" classname="publisher_and_manifest" time="0.322512" status="run">
+		<properties/>
+		<system-out>54 cross-language publisher/manifest checks passed
+</system-out>
+	</testcase>
+	<testcase name="github_publication" classname="github_publication" time="0.399947" status="run">
+		<properties/>
+		<system-out>GitHub dry-run, all 21 failure boundaries, immutable assets, replay guards, credential isolation and publication ordering passed
+</system-out>
+	</testcase>
+	<testcase name="transfer_and_staging" classname="transfer_and_staging" time="11.4817" status="run">
+		<properties/>
+		<system-out>/usr/lib/python3.11/zipfile.py:1547: UserWarning: Duplicate name: 'Data/base.pak'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+37 HTTP/HTTPS/resume/cancellation/ZIP checks passed
+</system-out>
+	</testcase>
+	<testcase name="installer_recovery" classname="installer_recovery" time="10.4787" status="run">
+		<properties/>
+		<system-out>196 installer assertions/process checks passed; 52 crash boundaries recovered
+</system-out>
+	</testcase>
+	<testcase name="shared_data_and_mods" classname="shared_data_and_mods" time="2.29278" status="run">
+		<properties/>
+		<system-out>{"shared_data_and_mod_checks": 81, "skipped": []}
+</system-out>
+	</testcase>
+	<testcase name="launcher_lifecycle" classname="launcher_lifecycle" time="14.9735" status="run">
+		<properties/>
+		<system-out>11 native command checks; offline Play, language persistence, cwd/argv, process exclusion, shortcut, handoff, collision and GUI install passed
+</system-out>
+	</testcase>
+</testsuite>

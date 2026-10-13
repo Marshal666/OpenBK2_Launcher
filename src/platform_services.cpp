@@ -14,6 +14,7 @@
 #include <tlhelp32.h>
 #include <windows.h>
 #else
+#include "../assets/launcher_icon.hpp"
 #include <cerrno>
 #include <csignal>
 #include <fcntl.h>
@@ -27,7 +28,7 @@ extern char **environ;
 namespace launcher {
 namespace fs = std::filesystem;
 std::string path_utf8(const fs::path &path) {
-    auto value = path.u8string();
+    auto value = path.generic_u8string();
     return {value.begin(), value.end()};
 }
 std::string native_platform() {
@@ -71,6 +72,34 @@ fs::path home_directory() {
     if (!value || !fs::path(value).is_absolute())
         fail(ErrorCategory::Filesystem, "HOME is unavailable");
     return value;
+}
+std::string desktop_icon_path(const fs::path &path) {
+    // Icon is an iconstring, not an Exec argument: escape desktop-entry values
+    // without shell quotes or percent field-code expansion.
+    std::string result;
+    for (char c : path_utf8(path)) {
+        switch (c) {
+        case '\\':
+            result += "\\\\";
+            break;
+        case ' ':
+            result += "\\s";
+            break;
+        case '\n':
+            result += "\\n";
+            break;
+        case '\r':
+            result += "\\r";
+            break;
+        case '\t':
+            result += "\\t";
+            break;
+        default:
+            result += c;
+            break;
+        }
+    }
+    return result;
 }
 #endif
 } // namespace
@@ -162,6 +191,7 @@ void create_desktop_shortcut(const fs::path &executable, const fs::path &desktop
         std::unique_ptr<IShellLinkW, void (*)(IShellLinkW *)>(raw, [](auto *p) { p->Release(); });
     if (FAILED(link->SetPath(executable.c_str())) ||
         FAILED(link->SetWorkingDirectory(executable.parent_path().c_str())) ||
+        FAILED(link->SetIconLocation(executable.c_str(), 0)) ||
         FAILED(link->SetDescription(L"OpenBK2 Launcher")))
         fail(ErrorCategory::Filesystem, "Cannot configure shortcut");
     IPersistFile *persist_raw = nullptr;
@@ -174,12 +204,19 @@ void create_desktop_shortcut(const fs::path &executable, const fs::path &desktop
         fail(ErrorCategory::Filesystem, "Cannot write shortcut");
     root.rename(temp, "OpenBK2 Launcher.lnk", true);
 #else
+    const char *data_home = std::getenv("XDG_DATA_HOME");
+    const auto data = data_home && fs::path(data_home).is_absolute() ? fs::path(data_home)
+                                                                     : home_directory() / ".local/share";
+    SafeRoot icons(data / "openbk2-launcher", true);
+    icons.write_atomic("icon.png", {reinterpret_cast<const char *>(art::icon::png), sizeof(art::icon::png)});
     // GLib 2.72 checks the executable before expanding %% field escapes. Use
     // the native env utility as argv[0], with the final launcher as a quoted
     // argument. This invokes no shell and preserves literal percent characters.
     const auto contents = "[Desktop Entry]\nType=Application\nName=OpenBK2 Launcher\nComment=Install, update "
                           "and play OpenBK2\nExec=/usr/bin/env -- " +
-                          desktop_exec_quote(path_utf8(executable)) + "\nTerminal=false\nCategories=Game;\n";
+                          desktop_exec_quote(path_utf8(executable)) +
+                          "\nIcon=" + desktop_icon_path(icons.path() / "icon.png") +
+                          "\nTerminal=false\nCategories=Game;\n";
     root.write_atomic("openbk2-launcher.desktop", contents);
     auto file = root.open("openbk2-launcher.desktop", FileMode::Append);
     file.set_executable(true);
@@ -277,6 +314,8 @@ void ChildProcess::start(const fs::path &executable, const fs::path &cwd,
 #endif
 }
 bool game_process_running(const fs::path &executable) {
+    // Signed paths use '/', while native Windows process image paths use '\\'.
+    const auto expected = fs::absolute(executable).lexically_normal().make_preferred();
 #ifdef _WIN32
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE)
@@ -292,7 +331,7 @@ bool game_process_running(const fs::path &executable) {
         DWORD size = static_cast<DWORD>(name.size());
         if (QueryFullProcessImageNameW(process, 0, name.data(), &size)) {
             name.resize(size);
-            found = CompareStringOrdinal(name.c_str(), -1, executable.c_str(), -1, TRUE) == CSTR_EQUAL;
+            found = CompareStringOrdinal(name.c_str(), -1, expected.c_str(), -1, TRUE) == CSTR_EQUAL;
         }
         CloseHandle(process);
         if (found)
@@ -307,7 +346,7 @@ bool game_process_running(const fs::path &executable) {
         if (name.empty() || name.find_first_not_of("0123456789") != name.npos)
             continue;
         auto target = fs::read_symlink(entry.path() / "exe", error);
-        if (!error && target == executable)
+        if (!error && target == expected)
             return true;
         error.clear();
     }
@@ -409,7 +448,8 @@ void complete_handoff(const SafeRoot &config, const std::string &token) {
     auto doc = json::parse(config.read("handoff-" + token + ".json", 65536));
     auto value = yyjson_doc_get_root(doc.get());
     json::fields(value, {"source", "destination", "parent_pid", "sha256"});
-    const auto source = utf8_path(json::string(json::get(value, "source")));
+    // The handoff record uses '/', but Windows process APIs return native separators.
+    const auto source = utf8_path(json::string(json::get(value, "source"))).make_preferred();
     const auto destination = utf8_path(json::string(json::get(value, "destination")));
     const auto pid = json::number(json::get(value, "parent_pid"));
     const auto self = executable_path();

@@ -1,5 +1,6 @@
 #pragma once
 #include "launcher/installer.hpp"
+#include "launcher/mod_manager.hpp"
 #include "launcher/platform_services.hpp"
 #include "launcher/settings.hpp"
 #include <thread>
@@ -13,6 +14,7 @@ struct UiSnapshot {
     Settings settings;
     std::shared_ptr<const Manifest> latest;
     std::shared_ptr<const InstalledState> installed;
+    std::vector<LocalMod> mods;
     Progress progress;
     std::string status = "Starting", error;
     bool busy = false, checking = false, initialized = false, ready = false, root_missing = false,
@@ -31,6 +33,8 @@ class Controller {
     void work(std::function<void(std::stop_token)> action);
     void refresh_local(std::stop_token stop);
     void problem(std::string message);
+    std::filesystem::path fetch_package(const PackageRecord &, const std::filesystem::path &root,
+                                        std::stop_token, ProgressSink);
 
   public:
     explicit Controller(ApplicationOptions options);
@@ -40,6 +44,8 @@ class Controller {
     void check_updates();
     void configure(Settings settings);
     void install(InstallMode mode = InstallMode::Update);
+    void download_mod(std::string id);
+    void remove_mod(std::string id);
     void play();
     void shortcut();
     void cancel();

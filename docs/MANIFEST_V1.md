@@ -1,5 +1,8 @@
 # Signed manifest v1
 
+Launcher 0.2.0 continues to accept this schema. For shared base packages and
+optional mod downloads, use [manifest v2](MANIFEST_V2.md).
+
 The normative field names and shape are in specification sections 9–10. The
 Python producer (`tools/schema.py`) and C++ verifier (`src/manifest.cpp`) enforce
 the same inventory contract. `tools/fixture_builder.py --out <empty-dir>` creates

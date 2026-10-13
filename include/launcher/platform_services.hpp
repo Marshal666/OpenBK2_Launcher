@@ -3,6 +3,8 @@
 #include <memory>
 #include <mutex>
 namespace launcher {
+// UTF-8 text for display and persistence, with '/' directory separators.
+// Literal backslashes in POSIX filenames remain intact.
 std::string path_utf8(const std::filesystem::path &path);
 std::filesystem::path executable_path();
 std::filesystem::path config_directory();
