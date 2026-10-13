@@ -84,6 +84,7 @@ std::string bytes(std::uint64_t n) {
 const char *tr(std::string_view locale, const char *english) {
     static constexpr std::pair<const char *, const char *> german[] = {
         {"Settings", "Einstellungen"},
+        {"Back to launcher", "Zurück zum Launcher"},
         {"Mods", "Mods"},
         {"Download", "Herunterladen"},
         {"Remove", "Entfernen"},
@@ -118,6 +119,124 @@ bool action(const char *title, bool enabled, const char *explanation, ImVec2 siz
     if (!enabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         ImGui::SetTooltip("%s", explanation);
     return clicked;
+}
+// Returns false when navigation or a submitted operation returns to the launcher.
+bool settings_page(SDL_Window *window, Controller &controller, const UiSnapshot &state, Settings &draft,
+                   std::array<char, 32768> &folder, const std::shared_ptr<DialogState> &dialog, bool game,
+                   bool &pending_install) {
+    const auto locale = draft.requested_language;
+    auto t = [&](const char *value) { return tr(locale, value); };
+    bool stay = true;
+    const float back_width = ImGui::CalcTextSize(t("Back to launcher")).x + 24;
+    ImGui::AlignTextToFramePadding();
+    ImGui::PushFont(nullptr, 26);
+    ImGui::TextUnformatted(t(state.settings.configured ? "Settings" : "Install OpenBK2"));
+    ImGui::PopFont();
+    ImGui::SameLine(ImGui::GetWindowWidth() - back_width);
+    if (ImGui::Button(t("Back to launcher")))
+        return false;
+    const float s = ImGui::GetStyle().FontScaleDpi;
+    ImGui::Separator();
+    ImGui::BeginDisabled(state.busy);
+    ImGui::TextUnformatted(t("Installation folder"));
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 135 * s);
+    ImGui::InputText("##folder", folder.data(), folder.size());
+    ImGui::SameLine();
+    bool dialog_pending;
+    {
+        std::scoped_lock lock(dialog->mutex);
+        dialog_pending = dialog->pending;
+    }
+    if (action(t("Browse"), !dialog_pending, "Folder dialog is open")) {
+        {
+            std::scoped_lock lock(dialog->mutex);
+            dialog->pending = true;
+        }
+        SDL_ShowOpenFolderDialog(folder_selected, new std::shared_ptr<DialogState>(dialog), window,
+                                 folder[0] ? folder.data() : nullptr, false);
+    }
+    ImGui::TextWrapped("Selecting an existing folder adopts its verified files. Changing this "
+                       "path does not move game data.");
+    ImGui::TextUnformatted(t("Game language"));
+    ImGui::SetNextItemWidth(230 * s);
+    if (ImGui::BeginCombo("##language", draft.requested_language.c_str())) {
+        if (state.latest)
+            for (const auto &[code, language] : state.latest->languages) {
+                const auto label = language.label + " (" + code + ")";
+                if (ImGui::Selectable(label.c_str(), code == draft.requested_language))
+                    draft.requested_language = code;
+            }
+        else
+            ImGui::TextDisabled("English / waiting for signed release");
+        ImGui::EndCombo();
+    }
+    ImGui::TextDisabled("UI: English / partial Deutsch; other game languages use English UI.");
+    ImGui::Checkbox(t("Move launcher into installation folder"), &draft.relocate);
+    ImGui::Checkbox(t("Create desktop shortcut"), &draft.shortcut);
+    ImGui::TextWrapped("Download: up to %s. Estimated working space: %s. Space and writability "
+                       "are checked before changes.",
+                       bytes(state.download_bytes).c_str(), bytes(state.working_bytes).c_str());
+    {
+        std::scoped_lock lock(dialog->mutex);
+        if (!dialog->error.empty())
+            ImGui::TextWrapped("%s", dialog->error.c_str());
+    }
+    ImGui::Separator();
+    const bool path_changed = path_utf8(state.settings.root) != folder.data();
+    if (ImGui::Button(t("Save"))) {
+        draft.root = utf8_path(folder.data());
+        controller.configure(draft);
+        stay = false;
+    }
+    ImGui::SameLine();
+    if (action(t(state.settings.configured ? "Apply language" : "Install"),
+               bool(state.latest) && !state.root_missing && !game,
+               "Wait for a verified release, or save a reselected folder first")) {
+        draft.root = utf8_path(folder.data());
+        controller.configure(draft);
+        pending_install = true;
+        stay = false;
+    }
+    if (state.settings.configured && !path_changed) {
+        if (action(t("Repair"), bool(state.latest) && !game, "Verified release required")) {
+            controller.install(InstallMode::Repair);
+            stay = false;
+        }
+        ImGui::SameLine();
+        if (action(t("Full reinstall"), bool(state.latest) && !game, "Verified release required"))
+            ImGui::OpenPopup("Confirm reinstall");
+        if (ImGui::BeginPopupModal("Confirm reinstall", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("Restore all managed files. Modified files are backed up; "
+                                   "user files are preserved.");
+            if (ImGui::Button("Continue")) {
+                controller.install(InstallMode::Reinstall);
+                stay = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(t("Cancel")))
+                ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(t("Create desktop shortcut")))
+            controller.shortcut();
+    }
+    if (action(t("Check for updates"), !state.checking, "Already checking"))
+        controller.check_updates();
+    if (state.installed)
+        ImGui::TextDisabled("Installed: %s / %s", state.installed->manifest.version.c_str(),
+                            state.installed->language.c_str());
+    ImGui::EndDisabled();
+    if (!state.error.empty()) {
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextColored({1, .65f, .5f, 1}, "%s", state.error.c_str());
+        ImGui::PopTextWrapPos();
+    } else if (state.checking)
+        ImGui::TextDisabled("Checking for updates...");
+    else
+        ImGui::TextWrapped("%s", state.status.c_str());
+    return stay;
 }
 void popup_geometry(ImVec2 viewport, float scale, ImVec2 initial) {
     const ImVec2 maximum{std::max(1.f, viewport.x - 24 * scale), std::max(1.f, viewport.y - 32 * scale)};
@@ -231,12 +350,14 @@ int run_application(const ApplicationOptions &options) {
         if (closing && !state.busy && !options.smoke_test &&
             (!options.auto_install || captured || options.capture.empty()))
             break;
-        if (!draft_loaded && (state.initialized || options.smoke_test)) {
+        auto load_draft = [&] {
             draft = state.settings;
             const auto text = path_utf8(draft.root);
             std::snprintf(folder.data(), folder.size(), "%s", text.c_str());
             draft_loaded = true;
-        }
+        };
+        if (!draft_loaded && (state.initialized || options.smoke_test))
+            load_draft();
         if (!first_shown && state.initialized && !state.settings.configured && !options.auto_install) {
             show_settings = true;
             first_shown = true;
@@ -272,8 +393,14 @@ int run_application(const ApplicationOptions &options) {
                    {126 * s, 36 * s}))
             show_mods = true;
         ImGui::SetCursorPos({size.x - 258 * s, 6 * s});
-        if (action(t("Settings"), !state.busy, "Wait for the current operation", {126 * s, 36 * s})) {
-            draft_loaded = false;
+        if (show_settings)
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.16f, .42f, .32f, 1));
+        const bool open_settings =
+            action(t("Settings"), !state.busy, "Wait for the current operation", {126 * s, 36 * s});
+        if (show_settings)
+            ImGui::PopStyleColor();
+        if (open_settings && !show_settings) {
+            load_draft();
             show_settings = true;
         }
         ImGui::SameLine();
@@ -282,76 +409,95 @@ int run_application(const ApplicationOptions &options) {
         ImGui::SameLine();
         if (ImGui::Button("X", {42 * s, 36 * s}))
             closing = true;
-        const float bottom = std::max(220 * s, size.y - 165 * s);
-        auto *draw = ImGui::GetWindowDrawList();
-        draw->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(hero.get())), {0, 52 * s},
-                       {size.x, bottom});
-        draw->AddRectFilledMultiColor({0, 52 * s}, {size.x, bottom}, IM_COL32(4, 8, 12, 15),
-                                      IM_COL32(4, 8, 12, 15), IM_COL32(4, 8, 12, 235),
-                                      IM_COL32(4, 8, 12, 235));
-        ImGui::SetCursorPos({34 * s, bottom - 124 * s});
-        ImGui::PushFont(nullptr, 42);
-        ImGui::TextUnformatted("OPENBK2");
-        ImGui::PopFont();
-        ImGui::SetCursorPos({36 * s, bottom - 66 * s});
-        ImGui::TextUnformatted("Your next campaign starts here.");
-        ImGui::SetCursorPos({36 * s, bottom - 35 * s});
-        ImGui::TextColored({.5f, .85f, .7f, 1}, "%s",
-                           OBK_FIXTURE_BUILD ? "DEVELOPMENT BUILD  /  SIGNED FIXTURES"
-                                             : "INDEPENDENT COMMUNITY LAUNCHER");
         const bool game = controller && controller->game_running();
-        const bool current = state.ready && state.latest && state.installed &&
-                             state.latest->sequence == state.installed->manifest.sequence &&
-                             state.settings.requested_language == state.installed->language;
-        ImGui::SetCursorPos({32 * s, bottom + 14 * s});
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.16f, .42f, .32f, 1));
-        if (action(t("Play"), state.ready && !state.busy && !game,
-                   "Finish installation or repair first; close an already running game", {160 * s, 44 * s}))
-            controller->play();
-        ImGui::PopStyleColor();
-        ImGui::SameLine();
-        const char *install_label = current ? "Up to date" : (state.installed ? "Update" : "Install");
-        if (action(t(install_label),
-                   !state.busy && !game && bool(state.latest) && !current && !state.root_missing,
-                   "A verified release and available game folder are required", {160 * s, 44 * s})) {
-            if (!state.settings.configured)
-                show_settings = true;
-            else
-                controller->install();
-        }
-        ImGui::SameLine();
-        ImGui::BeginGroup();
-        if (state.installed)
-            ImGui::Text("%s  |  %s", state.installed->manifest.version.c_str(),
-                        state.installed->language.c_str());
-        else
-            ImGui::TextUnformatted("No managed installation");
-        ImGui::TextDisabled("%s", state.checking ? "Checking for updates..."
-                                                 : (game ? "Game is running" : state.status.c_str()));
-        ImGui::EndGroup();
-        ImGui::SetCursorPos({32 * s, bottom + 72 * s});
-        if (state.busy) {
-            const auto &p = state.progress;
-            ImGui::Text("%s  %s / %s  %s/s", p.stage.c_str(), bytes(p.completed).c_str(),
-                        bytes(p.total).c_str(),
-                        bytes(std::uint64_t(std::max(0., p.bytes_per_second))).c_str());
-            if (p.total)
-                ImGui::ProgressBar(float(double(p.completed) / double(p.total)), {size.x - 170 * s, 7 * s},
-                                   "");
-            else
-                ImGui::TextDisabled("Working...");
+        if (show_settings) {
+            ImGui::GetWindowDrawList()->AddLine({0, 52 * s}, {size.x, 52 * s},
+                                                ImGui::GetColorU32(ImGuiCol_Separator));
+            ImGui::SetCursorPos({32 * s, 64 * s});
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {12, 6});
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {12, 6});
+            // A borderless content region keeps scrolling on small screens local
+            // to the form, while the app header and footer stay in place.
+            if (ImGui::BeginChild("settings-content",
+                                  {std::max(1.f, size.x - 64 * s), std::max(1.f, size.y - 108 * s)}))
+                show_settings = settings_page(window.get(), *controller, state, draft, folder, dialog, game,
+                                              pending_install);
+            ImGui::EndChild();
+            ImGui::PopStyleVar(2);
+        } else {
+            const float bottom = std::max(220 * s, size.y - 165 * s);
+            auto *draw = ImGui::GetWindowDrawList();
+            draw->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(hero.get())), {0, 52 * s},
+                           {size.x, bottom});
+            draw->AddRectFilledMultiColor({0, 52 * s}, {size.x, bottom}, IM_COL32(4, 8, 12, 15),
+                                          IM_COL32(4, 8, 12, 15), IM_COL32(4, 8, 12, 235),
+                                          IM_COL32(4, 8, 12, 235));
+            ImGui::SetCursorPos({34 * s, bottom - 124 * s});
+            ImGui::PushFont(nullptr, 42);
+            ImGui::TextUnformatted("OPENBK2");
+            ImGui::PopFont();
+            ImGui::SetCursorPos({36 * s, bottom - 66 * s});
+            ImGui::TextUnformatted("Your next campaign starts here.");
+            ImGui::SetCursorPos({36 * s, bottom - 35 * s});
+            ImGui::TextColored({.5f, .85f, .7f, 1}, "%s",
+                               OBK_FIXTURE_BUILD ? "DEVELOPMENT BUILD  /  SIGNED FIXTURES"
+                                                 : "INDEPENDENT COMMUNITY LAUNCHER");
+            const bool current = state.ready && state.latest && state.installed &&
+                                 state.latest->sequence == state.installed->manifest.sequence &&
+                                 state.settings.requested_language == state.installed->language;
+            ImGui::SetCursorPos({32 * s, bottom + 14 * s});
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.16f, .42f, .32f, 1));
+            if (action(t("Play"), state.ready && !state.busy && !game,
+                       "Finish installation or repair first; close an already running game",
+                       {160 * s, 44 * s}))
+                controller->play();
+            ImGui::PopStyleColor();
             ImGui::SameLine();
-            if (ImGui::SmallButton(t("Cancel")))
-                controller->cancel();
-        } else if (!state.error.empty()) {
-            ImGui::PushTextWrapPos(size.x - 28 * s);
-            ImGui::TextColored({1, .65f, .5f, 1}, "%s", state.error.c_str());
-            ImGui::PopTextWrapPos();
-        } else if (state.installed && state.settings.requested_language != state.installed->language)
-            ImGui::TextWrapped("Pending game language: %s. Offline Play uses %s.",
-                               state.settings.requested_language.c_str(), state.installed->language.c_str());
-        else if (!state.ready)
-            ImGui::TextWrapped("%s", state.status.c_str());
+            const char *install_label = current ? "Up to date" : (state.installed ? "Update" : "Install");
+            if (action(t(install_label),
+                       !state.busy && !game && bool(state.latest) && !current && !state.root_missing,
+                       "A verified release and available game folder are required", {160 * s, 44 * s})) {
+                if (!state.settings.configured) {
+                    load_draft();
+                    show_settings = true;
+                } else
+                    controller->install();
+            }
+            ImGui::SameLine();
+            ImGui::BeginGroup();
+            if (state.installed)
+                ImGui::Text("%s  |  %s", state.installed->manifest.version.c_str(),
+                            state.installed->language.c_str());
+            else
+                ImGui::TextUnformatted("No managed installation");
+            ImGui::TextDisabled("%s", state.checking ? "Checking for updates..."
+                                                     : (game ? "Game is running" : state.status.c_str()));
+            ImGui::EndGroup();
+            ImGui::SetCursorPos({32 * s, bottom + 72 * s});
+            if (state.busy) {
+                const auto &p = state.progress;
+                ImGui::Text("%s  %s / %s  %s/s", p.stage.c_str(), bytes(p.completed).c_str(),
+                            bytes(p.total).c_str(),
+                            bytes(std::uint64_t(std::max(0., p.bytes_per_second))).c_str());
+                if (p.total)
+                    ImGui::ProgressBar(float(double(p.completed) / double(p.total)),
+                                       {size.x - 170 * s, 7 * s}, "");
+                else
+                    ImGui::TextDisabled("Working...");
+                ImGui::SameLine();
+                if (ImGui::SmallButton(t("Cancel")))
+                    controller->cancel();
+            } else if (!state.error.empty()) {
+                ImGui::PushTextWrapPos(size.x - 28 * s);
+                ImGui::TextColored({1, .65f, .5f, 1}, "%s", state.error.c_str());
+                ImGui::PopTextWrapPos();
+            } else if (state.installed && state.settings.requested_language != state.installed->language)
+                ImGui::TextWrapped("Pending game language: %s. Offline Play uses %s.",
+                                   state.settings.requested_language.c_str(),
+                                   state.installed->language.c_str());
+            else if (!state.ready)
+                ImGui::TextWrapped("%s", state.status.c_str());
+        }
         ImGui::SetCursorPos({32 * s, size.y - 27 * s});
         ImGui::TextDisabled("v%s%s", OBK_VERSION,
                             drag_available ? "" : "  |  Use the desktop window menu to move this window");
@@ -430,119 +576,6 @@ int run_application(const ApplicationOptions &options) {
                 }
                 ImGui::EndPopup();
             }
-        }
-        if (show_settings) {
-            popup_geometry(size, s, {900, 560});
-            ImGui::OpenPopup("Setup###settings");
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {12, 6});
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {12, 6});
-            if (ImGui::BeginPopupModal("Setup###settings", nullptr,
-                                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
-                ImGui::TextUnformatted(t(state.settings.configured ? "Settings" : "Install OpenBK2"));
-                ImGui::Separator();
-                ImGui::BeginDisabled(state.busy);
-                ImGui::TextUnformatted(t("Installation folder"));
-                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 135 * s);
-                ImGui::InputText("##folder", folder.data(), folder.size());
-                ImGui::SameLine();
-                bool dialog_pending;
-                {
-                    std::scoped_lock lock(dialog->mutex);
-                    dialog_pending = dialog->pending;
-                }
-                if (action(t("Browse"), !dialog_pending, "Folder dialog is open")) {
-                    {
-                        std::scoped_lock lock(dialog->mutex);
-                        dialog->pending = true;
-                    }
-                    SDL_ShowOpenFolderDialog(folder_selected, new std::shared_ptr<DialogState>(dialog),
-                                             window.get(), folder[0] ? folder.data() : nullptr, false);
-                }
-                ImGui::TextWrapped("Selecting an existing folder adopts its verified files. Changing this "
-                                   "path does not move game data.");
-                ImGui::TextUnformatted(t("Game language"));
-                ImGui::SetNextItemWidth(230 * s);
-                if (ImGui::BeginCombo("##language", draft.requested_language.c_str())) {
-                    if (state.latest)
-                        for (const auto &[code, language] : state.latest->languages) {
-                            const auto label = language.label + " (" + code + ")";
-                            if (ImGui::Selectable(label.c_str(), code == draft.requested_language))
-                                draft.requested_language = code;
-                        }
-                    else
-                        ImGui::TextDisabled("English / waiting for signed release");
-                    ImGui::EndCombo();
-                }
-                ImGui::TextDisabled("UI: English / partial Deutsch; other game languages use English UI.");
-                ImGui::Checkbox(t("Move launcher into installation folder"), &draft.relocate);
-                ImGui::Checkbox(t("Create desktop shortcut"), &draft.shortcut);
-                ImGui::TextWrapped("Download: up to %s. Estimated working space: %s. Space and writability "
-                                   "are checked before changes.",
-                                   bytes(state.download_bytes).c_str(), bytes(state.working_bytes).c_str());
-                {
-                    std::scoped_lock lock(dialog->mutex);
-                    if (!dialog->error.empty())
-                        ImGui::TextWrapped("%s", dialog->error.c_str());
-                }
-                ImGui::Separator();
-                const bool path_changed = path_utf8(state.settings.root) != folder.data();
-                if (ImGui::Button(t("Save"))) {
-                    draft.root = utf8_path(folder.data());
-                    controller->configure(draft);
-                    show_settings = false;
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::SameLine();
-                if (action(t(state.settings.configured ? "Apply language" : "Install"),
-                           bool(state.latest) && !state.root_missing && !game,
-                           "Wait for a verified release, or save a reselected folder first")) {
-                    draft.root = utf8_path(folder.data());
-                    controller->configure(draft);
-                    pending_install = true;
-                    show_settings = false;
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::SameLine();
-                if (ImGui::Button(t("Close"))) {
-                    show_settings = false;
-                    ImGui::CloseCurrentPopup();
-                }
-                if (state.settings.configured && !path_changed) {
-                    if (action(t("Repair"), bool(state.latest) && !game, "Verified release required")) {
-                        controller->install(InstallMode::Repair);
-                        show_settings = false;
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::SameLine();
-                    if (action(t("Full reinstall"), bool(state.latest) && !game, "Verified release required"))
-                        ImGui::OpenPopup("Confirm reinstall");
-                    if (ImGui::BeginPopupModal("Confirm reinstall", nullptr,
-                                               ImGuiWindowFlags_AlwaysAutoResize)) {
-                        ImGui::TextUnformatted("Restore all managed files. Modified files are backed up; "
-                                               "user files are preserved.");
-                        if (ImGui::Button("Continue")) {
-                            controller->install(InstallMode::Reinstall);
-                            show_settings = false;
-                            ImGui::CloseCurrentPopup();
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::Button(t("Cancel")))
-                            ImGui::CloseCurrentPopup();
-                        ImGui::EndPopup();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(t("Create desktop shortcut")))
-                        controller->shortcut();
-                }
-                if (action(t("Check for updates"), !state.checking, "Already checking"))
-                    controller->check_updates();
-                if (state.installed)
-                    ImGui::TextDisabled("Installed: %s / %s", state.installed->manifest.version.c_str(),
-                                        state.installed->language.c_str());
-                ImGui::EndDisabled();
-                ImGui::EndPopup();
-            }
-            ImGui::PopStyleVar(2);
         }
         if (closing && state.busy && !close_confirmed) {
             ImGui::OpenPopup("Close launcher?");

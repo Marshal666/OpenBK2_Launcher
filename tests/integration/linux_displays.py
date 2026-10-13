@@ -95,7 +95,7 @@ def main():
                     time.sleep(.2)
                 time.sleep(.5)
                 # 1000x600 logical layout; captured setup frame documents these coordinates.
-                click(845, 136)
+                click(882, 147)
                 picker = wait_for(lambda: window("Select|Choose|Open Directory|File Selection|zenity"), "Native folder picker did not open")
                 run(["xdotool", "windowactivate", "--sync", picker], check=True)
                 run(["xdotool", "key", "ctrl+l"], check=True)
@@ -105,7 +105,7 @@ def main():
                 run(["xdotool", "key", "Return"], check=True)
                 wait_for(lambda: window("Select|Choose|Open Directory|File Selection|zenity") is None, "Folder picker did not close")
                 time.sleep(.3)
-                click(98, 383)  # Save the selected folder; check the callback's result on disk.
+                click(60, 393)  # Save the selected folder; check the callback's result on disk.
                 wait_for(lambda: json.loads((config / "settings.json").read_text())["installation_root"] == str(selected), "Folder callback did not persist selection")
                 report["native_folder_picker_callback"] = "pass"
                 # Verify blank-title drag while buttons still receive normal pointer input.

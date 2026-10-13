@@ -21,18 +21,18 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 3,336,704 | 3.182 | `d75e9d1b104f1a8471292cc3f50edd7eea91db20242c730606b077c5c2165417` |
-| `OpenBK2Launcher-Linux-x64` | 8,090,032 | 7.715 | `daa892b54e8cfb7d1128bb44c040ce99f7594f68e302335ff182e9527a81ab49` |
+| `OpenBK2Launcher-Windows-x64.exe` | 3,336,704 | 3.182 | `fa739335314435a60b38f2c97ab242e1ca387016c2c86ca34e805739d25aa76f` |
+| `OpenBK2Launcher-Linux-x64` | 8,090,032 | 7.715 | `db0121415c7d636bcc0c35c042df1ac540170421385188f1468de8291140c123` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/icon-windows-binary-audit.json) and
-[Linux audit](results/icon-linux-binary-audit.json). Application dependencies and
+[Windows audit](results/settings-page-windows-binary-audit.json) and
+[Linux audit](results/settings-page-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,
 IPHLPAPI, KERNEL32, USER32, GDI32, WINMM, IMM32, ole32, VERSION, ADVAPI32,
 SETUPAPI, SHELL32 and the synchronization API set mentioned above.
-[Exact imports](results/icon-windows-binary-audit.imports.txt).
+[Exact imports](results/settings-page-windows-binary-audit.imports.txt).
 
 Linux ELF dependencies are `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`,
 `libc.so.6` and the normal ELF loader. Highest required glibc symbol is **2.34**;
@@ -41,7 +41,7 @@ the tested distribution remains Ubuntu 22.04, not every distribution with glibc
 static. Native folder picking requires a supported desktop portal or installed
 dialog utility (Zenity was tested). `/usr/bin/env` supports desktop shortcut
 execution. TLS uses statically linked Ubuntu OpenSSL with the system CA store.
-[Imports](results/icon-linux-binary-audit.imports.txt),
+[Imports](results/settings-page-linux-binary-audit.imports.txt),
 [symbol versions](results/linux-symbol-versions.txt),
 [actual toolchain](results/linux-toolchain.txt).
 
@@ -53,13 +53,14 @@ installed in both environments. The launcher has no dependency on this Python.
 
 ## Window and Settings update
 
-The current artifacts also include rounded outer corners and corrected popup
+The earlier window update added rounded outer corners and corrected popup
 resizing. Windows uses a native window region; X11 uses the system X Shape
 extension through `libXext.so.6`; Wayland uses a transparent SDL window with
 clipped corner pixels. This works with the software renderer used by the native
-display checks. Settings starts at 900 by 560 logical units, bounded by the
-available window size. Settings and Mods retain their resized dimensions during
-the current launcher session. Closing the launcher resets these dimensions.
+display checks. That revision gave Settings a 900 by 560 logical-unit default
+and retained resized popup dimensions during the launcher session. Settings has
+since become a page in the main content area, as described below. Mods still
+retains its resized dimensions until the launcher closes.
 
 The window-update builds passed the three relevant CTest checks (`renderer_smoke`,
 `binary_size`, `launcher_lifecycle`): Windows in 12.91 seconds and Linux in
@@ -97,6 +98,31 @@ with spaces, Unicode, backslashes and control-character escapes. A relative
 `_NET_WM_ICON` property matched all 48 by 48 pixels and their alpha values.
 The Wayland rendering/install check also passed; visual icon presentation in
 individual Wayland desktop shells was not tested.
+
+## Settings page update
+
+Settings and first-run setup now occupy the main content area below the existing
+header, with no nested window, title bar, resize grip or modal dimming. The Settings
+button indicates the current page. **Back to launcher** discards unsaved edits;
+**Save** persists preferences and returns to the main screen. Install, apply
+language and repair actions also return there for progress. Reinstall retains
+its confirmation dialog. Errors and update-check status appear in Settings.
+
+The default 1000 by 600 layout was visually inspected with all configured Settings
+controls visible without a scrollbar. The form can scroll on smaller screens while
+the header and footer remain fixed. Isolated X11 input checks verified returning
+to the main content, reopening Settings, discarding edits with Back, retaining
+edits when clicking the active Settings button, and saving a changed preference.
+The existing [X11 checks](results/settings-page-x11-results.json) passed native
+folder selection, title dragging, minimize/restore/close and mod controls; the
+[Wayland check](results/settings-page-wayland-results.json) passed rendering and
+fixture installation.
+
+Windows and Linux builds passed the three relevant CTest checks (`renderer_smoke`,
+`binary_size`, `launcher_lifecycle`) in 12.62 and 15.17 seconds, respectively.
+No updater or publishing logic changed. Mouse-driven Settings interaction was
+tested on X11; Windows and Wayland interaction and mixed-DPI behavior remain
+unverified. Artifact sizes remain 3.182 MiB and 7.715 MiB.
 
 ## Measurements
 

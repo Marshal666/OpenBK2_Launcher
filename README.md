@@ -14,6 +14,11 @@ and [shared-data/mod results](docs/SHARED_DATA_AND_MODS.md), with
 **fixture/development builds**. Production requires your HTTPS manifest endpoint
 and public verification key; no production trust values or private keys are bundled.
 
+**Settings** opens in the main content area. **Back to launcher** returns without
+saving edits; **Save** saves the preferences and returns. Installation and repair
+actions return to the main screen to show progress. The first-run setup uses the
+same page, and the window controls remain available in the header.
+
 ## Build and test
 
 Use CMake 3.25+, a C++20 compiler, and Python 3.11+ for developer tests/tools.

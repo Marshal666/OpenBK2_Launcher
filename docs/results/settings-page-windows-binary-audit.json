@@ -1,0 +1,26 @@
+{
+  "binary": "OpenBK2Launcher-Windows-x64.exe",
+  "bytes": 3336704,
+  "MiB": 3.182,
+  "within_10_MiB_target": true,
+  "sha256": "fa739335314435a60b38f2c97ab242e1ca387016c2c86ca34e805739d25aa76f",
+  "os_libraries": [
+    "bcrypt.dll",
+    "CRYPT32.dll",
+    "Secur32.dll",
+    "WS2_32.dll",
+    "IPHLPAPI.DLL",
+    "KERNEL32.dll",
+    "USER32.dll",
+    "GDI32.dll",
+    "WINMM.dll",
+    "IMM32.dll",
+    "ole32.dll",
+    "VERSION.dll",
+    "ADVAPI32.dll",
+    "SETUPAPI.dll",
+    "SHELL32.dll",
+    "api-ms-win-core-synch-l1-2-0.dll"
+  ],
+  "windows_7_import_blocker": true
+}
