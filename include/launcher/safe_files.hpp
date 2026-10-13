@@ -43,6 +43,10 @@ class SafeRoot {
     bool exists(std::string_view relative) const;
     void remove(std::string_view relative) const;
     void rename(std::string_view source, std::string_view destination, bool replace = false) const;
+    // Atomic, no-replace directory move within this installation. Callers must
+    // release handles pinning the source directory before calling on Windows.
+    void rename_directory(std::string_view source, std::string_view destination) const;
+    void flush_directory() const;
     void write_atomic(std::string_view relative, std::string_view bytes,
                       const std::function<void(std::string_view)> &checkpoint = {}) const;
     std::string read(std::string_view relative, std::size_t maximum) const;

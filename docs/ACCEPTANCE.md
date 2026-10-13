@@ -1,5 +1,9 @@
 # Acceptance evidence
 
+The user-requested 0.2.0 shared-data/mod extension has its own current
+[build and test report](SHARED_DATA_AND_MODS.md). The M6 evidence below records
+the original 0.1.0 acceptance run and remains available for comparison.
+
 Recorded 2026-10-12 against the specification's 28 cases. Tests use isolated,
 synthetic signed releases and native executable fixtures. **Pass** means the
 described automated scope passed; it does not certify all hardware or hostile

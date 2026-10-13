@@ -1,4 +1,5 @@
 #include "launcher/transaction.hpp"
+#include "build_config.hpp"
 #include "json.hpp"
 #include "launcher/error.hpp"
 #include "launcher/sha256.hpp"
@@ -377,8 +378,9 @@ TransactionResult Transaction::recover() {
     root_.write_atomic(".launcher/installed_manifest.envelope.json", target.envelope, checkpoint_);
     root_.write_atomic(".launcher/state.json", serialize_state(target, j.platform, j.language), checkpoint_);
     root_.write_atomic("launcher_installed.txt",
-                       "OpenBK2 Launcher 0.1.0\nGame: " + target.version + "\nPlatform: " + j.platform +
-                           "\nLanguage: " + j.language + "\nRelease date: " + target.created_utc +
+                       "OpenBK2 Launcher " + std::string(build::version) + "\nGame: " + target.version +
+                           "\nPlatform: " + j.platform + "\nLanguage: " + j.language +
+                           "\nRelease date: " + target.created_utc +
                            "\nNon-authoritative summary; signed state is in .launcher.\n",
                        checkpoint_);
     root_.write_atomic(back + "receipt.json", encode(j), checkpoint_);

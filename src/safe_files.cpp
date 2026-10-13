@@ -327,6 +327,52 @@ std::string unique_id() {
                   std::to_string(++counter))
         .substr(0, 32);
 }
+void SafeRoot::flush_directory() const {
+#ifndef _WIN32
+    if (fsync(impl_->parents.back()->handle))
+        io_error("Flush directory");
+#endif
+}
+void SafeRoot::rename_directory(std::string_view from, std::string_view to) const {
+    validate_relative_path(from);
+    validate_relative_path(to);
+    const auto source = impl_->root / utf8_path(from), destination = impl_->root / utf8_path(to);
+    auto source_parents = pin_directories(source.parent_path(), false);
+    auto destination_parents = pin_directories(destination.parent_path(), true);
+#ifdef _WIN32
+    Owner directory(CreateFileW(source.c_str(), DELETE | FILE_READ_ATTRIBUTES,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (directory.handle == invalid)
+        io_error("Open directory for move");
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!GetFileInformationByHandle(directory.handle, &info))
+        io_error("Inspect directory for move");
+    if (!(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+        fail(ErrorCategory::Filesystem, "Linked directory cannot be moved");
+    const auto length = destination.native().size() * sizeof(wchar_t);
+    std::vector<char> storage(sizeof(FILE_RENAME_INFO) + length);
+    auto *rename_info = reinterpret_cast<FILE_RENAME_INFO *>(storage.data());
+    rename_info->ReplaceIfExists = FALSE;
+    rename_info->RootDirectory = nullptr;
+    rename_info->FileNameLength = static_cast<DWORD>(length);
+    std::memcpy(rename_info->FileName, destination.c_str(), length);
+    if (!SetFileInformationByHandle(directory.handle, FileRenameInfo, rename_info,
+                                    static_cast<DWORD>(storage.size())))
+        io_error("Move directory without replacement");
+#else
+    Owner directory(openat(source_parents.back()->handle, source.filename().c_str(),
+                           O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+    if (directory.handle == invalid)
+        io_error("Open directory for move");
+    if (syscall(SYS_renameat2, source_parents.back()->handle, source.filename().c_str(),
+                destination_parents.back()->handle, destination.filename().c_str(), 1))
+        io_error("Move directory without replacement");
+    if (fsync(source_parents.back()->handle) || fsync(destination_parents.back()->handle))
+        io_error("Flush moved directories");
+#endif
+}
 void SafeRoot::write_atomic(std::string_view relative, std::string_view bytes,
                             const std::function<void(std::string_view)> &checkpoint) const {
     const auto temp = std::string(relative) + ".tmp-" + unique_id();

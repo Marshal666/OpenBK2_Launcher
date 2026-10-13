@@ -55,12 +55,14 @@ int test_main(int argc, char **argv) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(30));
             return 0;
         }
-        check(argc == 6, "controller args");
+        check(argc == 6 || (mode == "mods" && argc == 7), "controller args");
         ApplicationOptions options;
         options.config_override = utf8_path(argv[2]);
         options.root_override = utf8_path(argv[3]);
         options.fixture_release = argv[4];
         options.fixture_public_key = argv[5];
+        if (argc == 7)
+            options.fixture_package_base = argv[6];
         options.auto_install = true;
         if (mode == "offline")
             options.fixture_release.clear();
@@ -71,7 +73,7 @@ int test_main(int argc, char **argv) {
             check(controller.snapshot().root_missing, "missing root not reported");
             return 0;
         }
-        if (mode == "online") {
+        if (mode == "online" || mode == "mods") {
             controller.check_updates();
             idle(controller);
             check(bool(controller.snapshot().latest), "verified manifest missing");
@@ -79,6 +81,41 @@ int test_main(int argc, char **argv) {
             idle(controller);
             check(controller.snapshot().error.empty(), controller.snapshot().error.c_str());
             check(controller.snapshot().ready, "not ready after install");
+            if (mode == "mods") {
+                check(controller.snapshot().mods.empty(), "base install fetched a mod");
+                controller.download_mod("Alpha");
+                idle(controller);
+                check(controller.snapshot().error.empty(), controller.snapshot().error.c_str());
+                check(controller.snapshot().mods.size() == 1, "mod download not reflected in UI state");
+                SafeRoot game_root(options.root_override);
+                game_root.write_atomic("MODs/Alpha/user.cfg", "player edit");
+                controller.play();
+                idle(controller);
+                check(controller.game_running(), "mod fixture game did not start");
+                controller.remove_mod("Alpha");
+                idle(controller);
+                check(!controller.snapshot().error.empty(), "mod removal permitted while game running");
+                TrustedKeys keys{{"fixture-only", public_key_from_hex(options.fixture_public_key)}};
+                try {
+                    ModManager(options.root_override, keys).remove("Alpha");
+                    check(false, "core mod removal permitted while game running");
+                } catch (const Error &error) {
+                    check(error.category == ErrorCategory::GameRunning, "wrong running-game error");
+                }
+                game_root.write_atomic("bin/fixture-stop", "stop");
+                while (controller.game_running())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+                controller.remove_mod("Alpha");
+                idle(controller);
+                check(controller.snapshot().error.empty(), controller.snapshot().error.c_str());
+                check(controller.snapshot().mods.empty() && controller.snapshot().ready,
+                      "mod removal state wrong");
+                controller.download_mod("Beta");
+                idle(controller);
+                check(controller.snapshot().error.empty(), controller.snapshot().error.c_str());
+                check(controller.snapshot().mods.size() == 1, "second mod not installed");
+                return 0;
+            }
         } else {
             check(controller.snapshot().ready, "offline verification failed");
             controller.check_updates();

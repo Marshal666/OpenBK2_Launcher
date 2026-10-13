@@ -79,6 +79,9 @@ std::string bytes(std::uint64_t n) {
 const char *tr(std::string_view locale, const char *english) {
     static constexpr std::pair<const char *, const char *> german[] = {
         {"Settings", "Einstellungen"},
+        {"Mods", "Mods"},
+        {"Download", "Herunterladen"},
+        {"Remove", "Entfernen"},
         {"Play", "Spielen"},
         {"Install", "Installieren"},
         {"Update", "Aktualisieren"},
@@ -160,7 +163,8 @@ int run_application(const ApplicationOptions &options) {
     auto dialog = std::make_shared<DialogState>();
     std::array<char, 32768> folder{};
     Settings draft;
-    bool draft_loaded = false, show_settings = false, first_shown = false;
+    bool draft_loaded = false, show_settings = false, show_mods = false, first_shown = false;
+    std::string remove_mod;
     bool running = true, closing = false, close_confirmed = false, check_started = false,
          pending_install = false, automated_started = false, captured = false, progress_captured = false;
     int frames = 0, result = 0;
@@ -238,6 +242,10 @@ int run_application(const ApplicationOptions &options) {
         ImGui::PopStyleVar();
         ImGui::SetCursorPos({24 * s, 14 * s});
         ImGui::TextUnformatted("OPENBK2");
+        ImGui::SetCursorPos({size.x - 396 * s, 6 * s});
+        if (action(t("Mods"), !state.busy && bool(state.installed), "Install the game first",
+                   {126 * s, 36 * s}))
+            show_mods = true;
         ImGui::SetCursorPos({size.x - 258 * s, 6 * s});
         if (action(t("Settings"), !state.busy, "Wait for the current operation", {126 * s, 36 * s})) {
             draft_loaded = false;
@@ -323,6 +331,83 @@ int run_application(const ApplicationOptions &options) {
         ImGui::TextDisabled("v%s%s", OBK_VERSION,
                             drag_available ? "" : "  |  Use the desktop window menu to move this window");
         ImGui::End();
+        if (show_mods) {
+            ImGui::SetNextWindowPos({size.x * .5f, size.y * .5f}, ImGuiCond_Always, {.5f, .5f});
+            ImGui::SetNextWindowSize(
+                {std::min(710 * s, size.x - 24 * s), std::min(520 * s, size.y - 56 * s)});
+            ImGui::OpenPopup("Mods###mods");
+            if (ImGui::BeginPopupModal("Mods###mods", nullptr,
+                                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
+                ImGui::TextWrapped(
+                    "The game loads one mod at a time. Remove the current mod before downloading another.");
+                ImGui::BeginChild("mod-list", {0, -125 * s});
+                ImGui::SeparatorText("Installed folders");
+                if (state.mods.empty())
+                    ImGui::TextDisabled("No mod installed");
+                for (const auto &mod : state.mods) {
+                    ImGui::PushID(mod.id.c_str());
+                    ImGui::TextUnformatted(mod.id.c_str());
+                    ImGui::SameLine();
+                    if (action(t("Remove"), !state.busy && !game && !mod.managed_by_game,
+                               "Close the game first. Base-game folders cannot be removed here."))
+                        remove_mod = mod.id;
+                    ImGui::PopID();
+                }
+                ImGui::SeparatorText("Available downloads");
+                if (!state.latest || state.latest->mods.empty())
+                    ImGui::TextWrapped("No downloadable mods in the current signed release.");
+                if (state.latest)
+                    for (const auto &[id, mod] : state.latest->mods) {
+                        ImGui::PushID(id.c_str());
+                        std::uint64_t download = 0;
+                        for (const auto &pid : mod.packages)
+                            download += state.latest->packages.at(pid).size;
+                        ImGui::Text("%s (%s)", mod.label.c_str(), bytes(download).c_str());
+                        ImGui::SameLine();
+                        const bool matching = state.installed && state.latest->payload_hash ==
+                                                                     state.installed->manifest.payload_hash;
+                        if (action(
+                                t("Download"),
+                                !state.busy && !game && state.ready && state.mods.empty() && matching,
+                                "Update or repair the game, close it, and remove any installed mod first."))
+                            controller->download_mod(id);
+                        ImGui::PopID();
+                    }
+                ImGui::EndChild();
+                if (!remove_mod.empty())
+                    ImGui::OpenPopup("Remove mod?");
+                if (ImGui::BeginPopupModal("Remove mod?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    ImGui::Text("Remove %s?", remove_mod.c_str());
+                    ImGui::TextUnformatted("The whole folder, including your edits, will be moved\nto "
+                                           ".launcher/backups/removed-mods. Nothing is deleted.");
+                    if (ImGui::Button(t("Remove"))) {
+                        controller->remove_mod(remove_mod);
+                        remove_mod.clear();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(t("Cancel"))) {
+                        remove_mod.clear();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
+                }
+                if (state.busy) {
+                    ImGui::Text("%s: %s / %s", state.progress.stage.c_str(),
+                                bytes(state.progress.completed).c_str(), bytes(state.progress.total).c_str());
+                    if (ImGui::Button(t("Cancel")))
+                        controller->cancel();
+                } else if (!state.error.empty())
+                    ImGui::TextWrapped("%s", state.error.c_str());
+                else
+                    ImGui::TextWrapped("%s", state.status.c_str());
+                if (ImGui::Button(t("Close"))) {
+                    show_mods = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+        }
         if (show_settings) {
             ImGui::SetNextWindowPos({size.x * .5f, size.y * .5f}, ImGuiCond_Always, {.5f, .5f});
             ImGui::SetNextWindowSize(

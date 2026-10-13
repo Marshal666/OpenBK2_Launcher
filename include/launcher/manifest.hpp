@@ -41,12 +41,18 @@ struct LanguageRecord {
     std::string label, package_id;
     FileRecord file;
 };
+struct ModRecord {
+    std::string label;
+    Inventory files;
+    std::vector<std::string> packages;
+};
 struct Manifest {
     std::string version, created_utc, payload, payload_hash, envelope;
     std::uint64_t sequence = 0;
     std::map<std::string, PackageRecord> packages;
     std::map<std::string, PlatformRecord> platforms;
     std::map<std::string, LanguageRecord> languages;
+    std::map<std::string, ModRecord> mods;
 };
 using TrustedKeys = std::map<std::string, std::array<std::uint8_t, 32>>;
 struct ManifestPolicy {

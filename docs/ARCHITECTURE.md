@@ -41,12 +41,20 @@ Decisions that narrow or adjust the specification:
   backups from interrupted preparation are retained under a quota; exhaustion
   fails safely and asks the operator to archive them. No automatic backup purge
   can discard a user's changes.
+* At the user's request, launcher 0.2.0 adds manifest v2: shared base packages and
+  a publisher-signed optional mod catalog. Separate shared and platform inputs
+  reject ambiguous overrides. The original v1 schema is still accepted.
+* The experimental Mods panel offers Download and recoverable Remove only.
+  Core mod operations have no GUI dependencies. One atomic directory move is
+  their commit boundary, using the same installation lock as game updates.
+  Mods remain user-editable and outside base repair ownership. A catalog change
+  requires a new game release sequence; there is no second trust/update channel.
 
 The original embedded hero art and icon are code-generated project artwork.
 No upstream game artwork, executable or game data is redistributed here.
 
 Relevant contracts: [update protocol](UPDATE_PROTOCOL.md),
-[manifest v1](MANIFEST_V1.md), [security](../SECURITY.md).
+[manifest v1](MANIFEST_V1.md), [manifest v2](MANIFEST_V2.md), [security](../SECURITY.md).
 
 Desktop behavior was checked against the [freedesktop Exec specification](https://specifications.freedesktop.org/desktop-entry/latest/exec-variables.html)
 and [GLib 2.72 parser](https://gitlab.gnome.org/GNOME/glib/-/blob/2.72.4/gio/gdesktopappinfo.c).

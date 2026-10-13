@@ -9,6 +9,6 @@ WindowLayout window_layout(float width, float height, float dpi_scale) noexcept 
     return {std::max(width, 1.0f), std::max(height, 1.0f), dpi_scale};
 }
 bool WindowLayout::draggable(float x, float y) const noexcept {
-    return x >= 180 * scale && x < width - 270 * scale && y >= 0 && y < 48 * scale;
+    return x >= 180 * scale && x < width - 408 * scale && y >= 0 && y < 48 * scale;
 }
 } // namespace launcher

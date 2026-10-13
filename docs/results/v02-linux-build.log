@@ -1,0 +1,205 @@
+[0/1] Re-running CMake...
+-- Using CMake version 3.31.6
+-- curl version=[8.20.0-DEV]
+-- CMake platform flags: UNIX GCC
+-- Picky compiler options: -Werror-implicit-function-declaration -W -Wall -Wpedantic -Wbad-function-cast -Wconversion -Wmissing-declarations -Wmissing-prototypes -Wnested-externs -Wno-long-long -Wno-multichar -Wpointer-arith -Wshadow -Wsign-compare -Wundef -Wunused -Wwrite-strings -Waddress -Wattributes -Wcast-align -Wcast-qual -Wdeclaration-after-statement -Wdiv-by-zero -Wempty-body -Wendif-labels -Wfloat-equal -Wformat-security -Wignored-qualifiers -Wmissing-field-initializers -Wmissing-noreturn -Wno-padded -Wno-sign-conversion -Wno-switch-default -Wno-switch-enum -Wno-system-headers -Wold-style-definition -Wredundant-decls -Wstrict-prototypes -Wtype-limits -Wunreachable-code -Wunused-parameter -Wvla -Wclobbered -Wmissing-parameter-type -Wold-style-declaration -Wpragmas -Wstrict-aliasing=3 -ftree-vrp -Wjump-misses-init -Wdouble-promotion -Wformat=2 -Wtrampolines -Warray-bounds=2 -Wno-format-signedness -Wduplicated-cond -Wnull-dereference -fdelete-null-pointer-checks -Wshift-negative-value -Wshift-overflow=2 -Wunused-const-variable -Walloc-zero -Wduplicated-branches -Wformat-truncation=2 -Wimplicit-fallthrough -Wrestrict -Warith-conversion -Wenum-conversion
+-- Enabled examples with dependencies: cacertinmem:USE_OPENSSL threaded:HAVE_THREADS_POSIX usercertinmem:USE_OPENSSL
+-- Protocols: http https ipfs ipns
+-- Features: alt-svc AsynchDNS HSTS HTTPS-proxy IPv6 Largefile SSL threadsafe TLS-SRP UnixSockets
+-- Enabled SSL backends: OpenSSL
+-- dynamic libX11 -> libX11.so.6
+-- dynamic libXext -> libXext.so.6
+-- dynamic libXcursor -> libXcursor.so.1
+-- dynamic libXi -> libXi.so.6
+-- dynamic libXfixes -> libXfixes.so.3
+-- dynamic libXrandr -> libXrandr.so.2
+-- dynamic libXrender -> libXrender.so.1
+-- dynamic libXss -> libXss.so.1
+-- Checking for module 'libdrm'
+--   No package 'libdrm' found
+-- Checking for module 'gbm'
+--   No package 'gbm' found
+-- Checking for modules 'wayland-client>=1.18;wayland-egl;wayland-cursor;egl;xkbcommon>=0.5.0'
+--   Found wayland-client, version 1.20.0
+--   Found wayland-egl, version 18.1.0
+--   Found wayland-cursor, version 1.20.0
+--   Found egl, version 1.5
+--   Found xkbcommon, version 1.4.0
+-- dynamic libwayland-client -> libwayland-client.so.0
+-- dynamic libwayland-egl -> libwayland-egl.so.1
+-- dynamic libwayland-cursor -> libwayland-cursor.so.0
+-- dynamic libxkbcommon -> libxkbcommon.so.0
+-- Checking for one of the modules 'dbus-1;dbus'
+-- Checking for one of the modules 'ibus-1.0;ibus'
+-- Checking for one of the modules 'liburing-ffi'
+-- 
+-- SDL3 was configured with the following options:
+-- 
+-- Platform: Linux-5.15.0-198-generic
+-- 64-bit:   TRUE
+-- Compiler: /usr/bin/cc
+-- Revision: SDL-3.2.28-7f3ae3d57459e59943a4ecfefc8f6277ec6bf540
+-- Vendor:   
+-- 
+-- Subsystems:
+--   Audio:    OFF
+--   Video:    ON
+--   GPU:      OFF
+--   Render:   ON
+--   Camera:   OFF
+--   Joystick: OFF
+--   Haptic:   OFF
+--   Hidapi:   OFF
+--   Power:    ON
+--   Sensor:   OFF
+--   Dialog:   ON
+-- 
+-- Options:
+--   SDL_ALSA                    (Wanted: OFF): OFF
+--   SDL_ALSA_SHARED             (Wanted: OFF): OFF
+--   SDL_ALTIVEC                 (Wanted: OFF): OFF
+--   SDL_ARMNEON                 (Wanted: OFF): OFF
+--   SDL_ASAN                    (Wanted: OFF): OFF
+--   SDL_ASSEMBLY                (Wanted: ON): ON
+--   SDL_ASSERTIONS              (Wanted: auto): auto
+--   SDL_AVX                     (Wanted: ON): ON
+--   SDL_AVX2                    (Wanted: ON): ON
+--   SDL_AVX512F                 (Wanted: ON): ON
+--   SDL_BACKGROUNDING_SIGNAL    (Wanted: OFF): OFF
+--   SDL_CCACHE                  (Wanted: OFF): OFF
+--   SDL_CLANG_TIDY              (Wanted: OFF): OFF
+--   SDL_CLOCK_GETTIME           (Wanted: ON): ON
+--   SDL_COCOA                   (Wanted: OFF): OFF
+--   SDL_DBUS                    (Wanted: ON): OFF
+--   SDL_DEPS_SHARED             (Wanted: ON): OFF
+--   SDL_DIRECTX                 (Wanted: OFF): OFF
+--   SDL_DISKAUDIO               (Wanted: OFF): OFF
+--   SDL_DUMMYAUDIO              (Wanted: OFF): OFF
+--   SDL_DUMMYCAMERA             (Wanted: OFF): OFF
+--   SDL_DUMMYVIDEO              (Wanted: ON): ON
+--   SDL_EXAMPLES                (Wanted: OFF): OFF
+--   SDL_EXAMPLES_LINK_SHARED    (Wanted: OFF): OFF
+--   SDL_FOREGROUNDING_SIGNAL    (Wanted: OFF): OFF
+--   SDL_GCC_ATOMICS             (Wanted: ON): ON
+--   SDL_GPU_DXVK                (Wanted: OFF): OFF
+--   SDL_HIDAPI                  (Wanted: OFF): OFF
+--   SDL_HIDAPI_JOYSTICK         (Wanted: OFF): OFF
+--   SDL_HIDAPI_LIBUSB           (Wanted: ON): OFF
+--   SDL_HIDAPI_LIBUSB_SHARED    (Wanted: ON): OFF
+--   SDL_IBUS                    (Wanted: ON): OFF
+--   SDL_INSTALL                 (Wanted: OFF): OFF
+--   SDL_INSTALL_TESTS           (Wanted: OFF): OFF
+--   SDL_JACK                    (Wanted: OFF): OFF
+--   SDL_JACK_SHARED             (Wanted: OFF): OFF
+--   SDL_KMSDRM                  (Wanted: ON): OFF
+--   SDL_KMSDRM_SHARED           (Wanted: ON): OFF
+--   SDL_LASX                    (Wanted: OFF): OFF
+--   SDL_LIBC                    (Wanted: ON): ON
+--   SDL_LIBICONV                (Wanted: OFF): OFF
+--   SDL_LIBUDEV                 (Wanted: ON): OFF
+--   SDL_LIBURING                (Wanted: ON): OFF
+--   SDL_LSX                     (Wanted: OFF): OFF
+--   SDL_METAL                   (Wanted: OFF): OFF
+--   SDL_MMX                     (Wanted: ON): ON
+--   SDL_OFFSCREEN               (Wanted: ON): ON
+--   SDL_OPENGL                  (Wanted: ON): ON
+--   SDL_OPENGLES                (Wanted: ON): ON
+--   SDL_OPENVR                  (Wanted: OFF): OFF
+--   SDL_OSS                     (Wanted: OFF): OFF
+--   SDL_PIPEWIRE                (Wanted: ON): OFF
+--   SDL_PIPEWIRE_SHARED         (Wanted: ON): OFF
+--   SDL_PTHREADS                (Wanted: ON): ON
+--   SDL_PTHREADS_SEM            (Wanted: ON): ON
+--   SDL_PULSEAUDIO              (Wanted: OFF): OFF
+--   SDL_PULSEAUDIO_SHARED       (Wanted: OFF): OFF
+--   SDL_RENDER_D3D              (Wanted: OFF): OFF
+--   SDL_RENDER_D3D11            (Wanted: OFF): OFF
+--   SDL_RENDER_D3D12            (Wanted: OFF): OFF
+--   SDL_RENDER_GPU              (Wanted: OFF): OFF
+--   SDL_RENDER_METAL            (Wanted: OFF): OFF
+--   SDL_RENDER_VULKAN           (Wanted: OFF): OFF
+--   SDL_ROCKCHIP                (Wanted: OFF): OFF
+--   SDL_RPATH                   (Wanted: ON): OFF
+--   SDL_RPI                     (Wanted: OFF): OFF
+--   SDL_SNDIO                   (Wanted: OFF): OFF
+--   SDL_SNDIO_SHARED            (Wanted: OFF): OFF
+--   SDL_SSE                     (Wanted: ON): ON
+--   SDL_SSE2                    (Wanted: ON): ON
+--   SDL_SSE3                    (Wanted: ON): ON
+--   SDL_SSE4_1                  (Wanted: ON): ON
+--   SDL_SSE4_2                  (Wanted: ON): ON
+--   SDL_SYSTEM_ICONV            (Wanted: ON): ON
+--   SDL_TESTS                   (Wanted: OFF): OFF
+--   SDL_TESTS_LINK_SHARED       (Wanted: OFF): OFF
+--   SDL_UNINSTALL               (Wanted: OFF): OFF
+--   SDL_VIRTUAL_JOYSTICK        (Wanted: OFF): OFF
+--   SDL_VIVANTE                 (Wanted: OFF): OFF
+--   SDL_VULKAN                  (Wanted: OFF): OFF
+--   SDL_WASAPI                  (Wanted: OFF): OFF
+--   SDL_WAYLAND                 (Wanted: ON): ON
+--   SDL_WAYLAND_LIBDECOR        (Wanted: OFF): OFF
+--   SDL_WAYLAND_LIBDECOR_SHARED (Wanted: OFF): OFF
+--   SDL_WAYLAND_SHARED          (Wanted: ON): ON
+--   SDL_X11                     (Wanted: ON): ON
+--   SDL_X11_SHARED              (Wanted: ON): ON
+--   SDL_X11_XCURSOR             (Wanted: ON): ON
+--   SDL_X11_XDBE                (Wanted: ON): ON
+--   SDL_X11_XFIXES              (Wanted: ON): ON
+--   SDL_X11_XINPUT              (Wanted: ON): ON
+--   SDL_X11_XRANDR              (Wanted: ON): ON
+--   SDL_X11_XSCRNSAVER          (Wanted: ON): ON
+--   SDL_X11_XSHAPE              (Wanted: ON): ON
+--   SDL_X11_XSYNC               (Wanted: ON): ON
+--   SDL_XINPUT                  (Wanted: OFF): OFF
+-- 
+--  Build Shared Library: OFF
+--  Build Static Library: ON
+--  Build Static Library with Position Independent Code: 
+-- 
+-- If something was not detected, although the libraries
+-- were installed, then make sure you have set the
+-- CMAKE_C_FLAGS and CMAKE_PREFIX_PATH CMake variables correctly.
+-- 
+-- Configuring done (0.6s)
+-- Generating done (0.1s)
+-- Build files have been written to: /home/builder/source/build/linux
+[1/39] Building C object CMakeFiles/miniz.dir/_deps/miniz_source-src/miniz.c.o
+[2/39] Building C object CMakeFiles/miniz.dir/_deps/miniz_source-src/miniz_tinfl.c.o
+[3/39] Building C object CMakeFiles/miniz.dir/_deps/miniz_source-src/miniz_zip.c.o
+[4/39] Linking C static library libminiz.a
+[5/39] Building CXX object CMakeFiles/launcher_core.dir/src/window_layout.cpp.o
+[6/39] Building CXX object CMakeFiles/launcher_core.dir/src/signature.cpp.o
+[7/39] Building CXX object CMakeFiles/launcher_core.dir/src/sha256.cpp.o
+[8/39] Building CXX object CMakeFiles/launcher_core.dir/src/safe_files.cpp.o
+[9/39] Building CXX object CMakeFiles/launcher_core.dir/src/zip_package_reader.cpp.o
+[10/39] Building CXX object CMakeFiles/launcher_core.dir/src/local_state.cpp.o
+[11/39] Building CXX object CMakeFiles/launcher_core.dir/src/update_planner.cpp.o
+[12/39] Building CXX object CMakeFiles/launcher_core.dir/src/http_downloader.cpp.o
+[13/39] Building CXX object CMakeFiles/launcher_core.dir/src/manifest.cpp.o
+[14/39] Building CXX object CMakeFiles/launcher_core.dir/src/installer.cpp.o
+[15/39] Building CXX object CMakeFiles/launcher_core.dir/src/platform_services.cpp.o
+[16/39] Building CXX object CMakeFiles/launcher_core.dir/src/controller.cpp.o
+[17/39] Building CXX object CMakeFiles/launcher_core.dir/src/mod_manager.cpp.o
+[18/39] Building CXX object CMakeFiles/launcher_core.dir/src/transaction.cpp.o
+[19/39] Building CXX object CMakeFiles/launcher_core.dir/src/settings.cpp.o
+[20/39] Linking CXX static library liblauncher_core.a
+[21/39] Building CXX object CMakeFiles/core_tests.dir/tests/core/window_layout_test.cpp.o
+[22/39] Linking CXX executable core_tests
+[23/39] Building CXX object CMakeFiles/OpenBK2Launcher.dir/src/main.cpp.o
+[24/39] Building CXX object CMakeFiles/manifest_check.dir/tests/core/manifest_check.cpp.o
+[25/39] Building CXX object CMakeFiles/security_tests.dir/tests/core/security_test.cpp.o
+[26/39] Linking CXX executable manifest_check
+[27/39] Linking CXX executable security_tests
+[28/39] Building CXX object CMakeFiles/transfer_check.dir/tests/core/transfer_check.cpp.o
+[29/39] Building CXX object CMakeFiles/OpenBK2Launcher.dir/src/application.cpp.o
+[30/39] Linking CXX executable transfer_check
+[31/39] Linking CXX executable OpenBK2Launcher-Linux-x64
+-- Launcher size: 8073648 bytes
+[32/39] Building CXX object CMakeFiles/mod_check.dir/tests/core/mod_check.cpp.o
+[33/39] Building CXX object CMakeFiles/installer_check.dir/tests/core/installer_check.cpp.o
+[34/39] Linking CXX executable mod_check
+[35/39] Linking CXX executable installer_check
+[36/39] Building CXX object CMakeFiles/fixture_game.dir/tests/core/fixture_game.cpp.o
+[37/39] Linking CXX executable fixture_game
+[38/39] Building CXX object CMakeFiles/lifecycle_check.dir/tests/core/lifecycle_check.cpp.o
+[39/39] Linking CXX executable lifecycle_check

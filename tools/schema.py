@@ -1,4 +1,4 @@
-"""Publisher-side validation of the v1 signed payload and portable file paths."""
+"""Publisher-side validation of signed payload v1/v2 and portable file paths."""
 import re
 from urllib.parse import urlsplit
 
@@ -84,8 +84,9 @@ def same_bytes(a, b):
 
 
 def validate_payload(m, fixture=False):
-    fields(m, {"schema_version", "release", "min_launcher_version", "packages", "platforms", "languages"})
-    require(type(m["schema_version"]) is int and m["schema_version"] == 1, "Unsupported schema")
+    schema = m.get("schema_version")
+    require(type(schema) is int and schema in {1, 2}, "Unsupported schema")
+    fields(m, {"schema_version", "release", "min_launcher_version", "packages", "platforms", "languages"} | ({"mods"} if schema == 2 else set()))
     fields(m["release"], {"version", "sequence", "created_utc"})
     require(re.fullmatch(r"[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}(-[A-Za-z0-9.-]+)?", m["release"]["version"]), "Invalid version")
     sequence = integer(m["release"]["sequence"])
@@ -93,14 +94,16 @@ def validate_payload(m, fixture=False):
     require(re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", m["release"]["created_utc"]), "Invalid UTC timestamp")
     minimum = m["min_launcher_version"]
     require(isinstance(minimum, str) and re.fullmatch(r"[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}", minimum), "Invalid minimum launcher version")
-    require(tuple(map(int, minimum.split("."))) <= (0, 1, 0), "Unsupported minimum launcher version")
+    minimum = tuple(map(int, minimum.split(".")))
+    require(minimum <= (0, 2, 0), "Unsupported minimum launcher version")
+    require(schema == 1 or minimum >= (0, 2, 0), "Schema v2 requires launcher 0.2.0")
     packages, used = {}, set()
     require(isinstance(m["packages"], list), "Invalid packages")
     for p in m["packages"]:
         fields(p, {"id", "kind", "platform", "url", "size", "unpacked_size", "sha256", "files"})
         require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", p["id"]) and p["id"] not in packages, "Invalid/duplicate package ID")
-        require(p["kind"] in {"snapshot", "patch", "language"}, "Invalid package kind")
-        require(p["platform"] == "any" if p["kind"] == "language" else p["platform"] in PLATFORMS, "Invalid package platform")
+        require(p["kind"] in ({"snapshot", "patch", "language", "mod"} if schema == 2 else {"snapshot", "patch", "language"}), "Invalid package kind")
+        require(p["platform"] == "any" if p["kind"] in {"language", "mod"} else p["platform"] in (PLATFORMS | ({"any"} if schema == 2 else set())), "Invalid package platform")
         safe_url(p["url"], fixture)
         require(integer(p["size"], PACKAGE_LIMIT) > 0, "Empty ZIP")
         integer(p["unpacked_size"], UNPACK_LIMIT)
@@ -111,7 +114,7 @@ def validate_payload(m, fixture=False):
 
     def package(pid, kind, platform):
         p = packages[pid]
-        require(p["kind"] == kind and p["platform"] == platform, "Package membership mismatch")
+        require(p["kind"] == kind and (p["platform"] == platform or (schema == 2 and kind in {"snapshot", "patch"} and p["platform"] == "any")), "Package membership mismatch")
         used.add(pid)
         return p
 
@@ -169,5 +172,26 @@ def validate_payload(m, fixture=False):
         for target in m["platforms"].values():
             paths_unique([f["path"] for f in target["files"]] + [lang["path"]])
     paths_unique(lang["path"] for lang in m["languages"].values())
+    if schema == 2:
+        require(isinstance(m["mods"], dict) and len(m["mods"]) <= 256, "Invalid mod catalog")
+        paths_unique(m["mods"].keys())
+        for mid, mod in m["mods"].items():
+            require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", mid), "Invalid mod identifier")
+            fields(mod, {"label", "files", "package_ids"})
+            require(isinstance(mod["label"], str) and 0 < len(mod["label"].encode()) <= 128, "Invalid mod label")
+            files = inventory(mod["files"], True)
+            require(files and sum(f["size"] for f in files.values()) <= UNPACK_LIMIT, "Invalid mod size")
+            require(len(mod["package_ids"]) == len(set(mod["package_ids"])), "Duplicate mod package reference")
+            packaged = inventory([f for pid in mod["package_ids"] for f in package(pid, "mod", "any")["files"]])
+            require(files.keys() == packaged.keys() and all(same_bytes(f, packaged[path]) for path, f in files.items()), "Mod package coverage mismatch")
+            prefix = "MODs/"+mid+"/"
+            for path in files:
+                require(path.startswith(prefix), "Mod file outside its folder")
+                managed_path(path, {path})
+            for target in m["platforms"].values():
+                folder = prefix[:-1].lower()
+                for f in target["files"]:
+                    path = f["path"].lower()
+                    require(path != folder and not path.startswith(folder+"/") and not folder.startswith(path+"/"), "Optional mod overlaps base game")
     require(used == packages.keys(), "Unreferenced package")
     return m

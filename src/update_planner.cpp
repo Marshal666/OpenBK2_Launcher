@@ -1,5 +1,6 @@
 #include "launcher/error.hpp"
 #include "launcher/planner.hpp"
+#include <algorithm>
 #include <limits>
 
 namespace launcher {
@@ -71,8 +72,11 @@ UpdatePlan plan_update(const SafeRoot &root, const LocalInstallation &local, con
                         Route next = route;
                         for (const auto &id : edge.packages) {
                             const auto &package = target.packages.at(id);
-                            next.cost = add(next.cost, package.size);
-                            next.packages.push_back(id);
+                            if (std::find(next.packages.begin(), next.packages.end(), id) ==
+                                next.packages.end()) {
+                                next.cost = add(next.cost, package.size);
+                                next.packages.push_back(id);
+                            }
                             for (const auto &[path, f] : package.files)
                                 next.files[path] = f;
                         }

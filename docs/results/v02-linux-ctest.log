@@ -1,0 +1,27 @@
+[HANDLER_OUTPUT] 
+Test project /home/builder/source/build/linux
+
+      Start  1: renderer_smoke
+ 1/10 Test  #1: renderer_smoke ...................   Passed    0.06 sec
+      Start  2: binary_size
+ 2/10 Test  #2: binary_size ......................   Passed    0.00 sec
+      Start  3: core_tests
+ 3/10 Test  #3: core_tests .......................   Passed    0.00 sec
+      Start  4: security_primitives
+ 4/10 Test  #4: security_primitives ..............   Passed    0.00 sec
+      Start  5: publisher_and_manifest
+ 5/10 Test  #5: publisher_and_manifest ...........   Passed    0.32 sec
+      Start  6: github_publication
+ 6/10 Test  #6: github_publication ...............   Passed    0.40 sec
+      Start  7: transfer_and_staging
+ 7/10 Test  #7: transfer_and_staging .............   Passed   11.48 sec
+      Start  8: installer_recovery
+ 8/10 Test  #8: installer_recovery ...............   Passed   10.48 sec
+      Start  9: shared_data_and_mods
+ 9/10 Test  #9: shared_data_and_mods .............   Passed    2.29 sec
+      Start 10: launcher_lifecycle
+10/10 Test #10: launcher_lifecycle ...............   Passed   14.97 sec
+
+100% tests passed, 0 tests failed out of 10
+
+Total Test time (real) =  40.02 sec

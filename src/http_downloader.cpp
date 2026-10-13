@@ -1,3 +1,4 @@
+#include "build_config.hpp"
 #include "launcher/downloader.hpp"
 #include "launcher/error.hpp"
 #include "launcher/sha256.hpp"
@@ -140,7 +141,7 @@ CURLcode perform(const std::string &url, Request &r, const DownloadOptions &conf
     option(curl.get(), CURLOPT_LOW_SPEED_LIMIT, 1024L);
     option(curl.get(), CURLOPT_LOW_SPEED_TIME, config.low_speed_time);
     option(curl.get(), CURLOPT_NOSIGNAL, 1L);
-    option(curl.get(), CURLOPT_USERAGENT, "OpenBK2Launcher/0.1.0");
+    option(curl.get(), CURLOPT_USERAGENT, build::user_agent.data());
     option(curl.get(), CURLOPT_HEADERFUNCTION, header);
     option(curl.get(), CURLOPT_HEADERDATA, &r);
     option(curl.get(), CURLOPT_WRITEFUNCTION, write_body);

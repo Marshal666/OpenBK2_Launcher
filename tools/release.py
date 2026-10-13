@@ -13,7 +13,7 @@ import zipfile
 from schema import PACKAGE_LIMIT, inventory, managed_path, paths_unique, require, safe_path, safe_url, validate_payload
 from signing import keygen, load_private, sign_payload, stable_json, strict_json, verify_envelope
 
-TOOL_VERSION = "0.1.0"
+TOOL_VERSION = "0.2.0"
 
 
 def file_hash(path):
@@ -32,7 +32,7 @@ def file_record(path, relative, executable=False):
     return {"path": relative, "size": path.stat().st_size, "sha256": file_hash(path), "executable": executable}
 
 
-def scan_root(root, platform, allowlist=(), exclude=()):
+def scan_root(root, platform, allowlist=(), exclude=(), require_allowlist=True):
     root = Path(root).resolve(strict=True)
     records, sources = [], {}
     for directory, dirs, names in os.walk(root, followlinks=False):
@@ -53,12 +53,13 @@ def scan_root(root, platform, allowlist=(), exclude=()):
             if any(fnmatch.fnmatchcase(rel, pattern) for pattern in exclude):
                 continue
             managed_path(rel, set(allowlist))
-            executable = rel == ("bin/Game.exe" if platform == "windows-x64" else "bin/Game") or (platform == "linux-x64" and bool(path.stat().st_mode & 0o111))
+            executable = rel == ("bin/Game.exe" if platform == "windows-x64" else "bin/Game") or (platform != "windows-x64" and bool(path.stat().st_mode & 0o111))
             records.append(file_record(path, rel, executable))
             sources[rel] = path
     records.sort(key=lambda f: f["path"])
     paths_unique(f["path"] for f in records)
-    require(all(path in sources for path in allowlist), "Allowlisted official file is missing from source")
+    if require_allowlist:
+        require(all(path in sources for path in allowlist), "Allowlisted official file is missing from source")
     return records, sources
 
 
@@ -109,12 +110,12 @@ def make_packages(out, base_url, kind, platform, records, sources, limit=PACKAGE
     return result
 
 
-def build_release(*, out, version, sequence, roots, languages_dir, base_url, previous=None, allowlist=(), exclude=(),
+def build_release(*, out, version, sequence, roots, languages_dir, base_url, previous=None, allowlist=(), exclude=(), shared_root=None, mods_dir=None,
                   created_utc="1970-01-01T00:00:00Z", package_limit=PACKAGE_LIMIT):
     out = Path(out).resolve()
     require(not out.exists() or not any(out.iterdir()), "Output directory must be empty")
     safe_url(base_url.rstrip("/")+"/")
-    for root in roots.values():
+    for root in [*roots.values(), *([shared_root] if shared_root else []), *([mods_dir] if mods_dir else [])]:
         require(not out.is_relative_to(Path(root).resolve()), "Output cannot be inside a game source root")
     out.mkdir(parents=True, exist_ok=True)
     old = None
@@ -122,33 +123,61 @@ def build_release(*, out, version, sequence, roots, languages_dir, base_url, pre
         previous = Path(previous).resolve(strict=True)
         old = verify_release(previous, allow_unsigned=True)
         require(sequence > old["release"]["sequence"], "New sequence must increase")
-    m = {"schema_version": 1, "release": {"version": version, "sequence": sequence, "created_utc": created_utc},
-         "min_launcher_version": "0.1.0", "packages": [], "platforms": {}, "languages": {}}
+    schema = 2 if shared_root or mods_dir or (old and old["schema_version"] == 2) else 1
+    m = {"schema_version": schema, "release": {"version": version, "sequence": sequence, "created_utc": created_utc},
+         "min_launcher_version": "0.2.0" if schema == 2 else "0.1.0", "packages": [], "platforms": {}, "languages": {}}
+    if schema == 2:
+        m["mods"] = {}
     histories = {}
     if old:
         metadata = strict_json((previous / "release-metadata.json").read_bytes())
         histories.update(metadata.get("history", {}))
         histories[str(old["release"]["sequence"])] = old["platforms"]
+    shared, shared_sources = scan_root(shared_root, "any", allowlist, exclude, False) if shared_root else ([], {})
+    shared_snapshots = make_packages(out, base_url, "snapshot", "any", shared, shared_sources, package_limit)
+    m["packages"].extend(shared_snapshots)
+    scanned, changes = {}, {}
     for platform, root in roots.items():
-        records, sources = scan_root(root, platform, allowlist, exclude)
-        snapshots = make_packages(out, base_url, "snapshot", platform, records, sources, package_limit)
+        specific, sources = scan_root(root, platform, allowlist, exclude, False)
+        records = sorted(shared + specific, key=lambda f: f["path"])
+        paths_unique(f["path"] for f in records)  # No ambiguous shared/platform overrides.
+        sources = {**shared_sources, **sources}
+        require(all(path in sources for path in allowlist), "Allowlisted official file is missing from combined source")
+        scanned[platform] = (records, specific, sources)
+        if old and platform in old["platforms"]:
+            prior_files = {f["path"]: f for f in old["platforms"][platform]["files"]}
+            changes[platform] = {f["path"]: f for f in records if prior_files.get(f["path"]) != f}
+    # Shared patch files are grouped by the platform edges that actually need
+    # them, so one asset can serve both without downloading unrelated changes.
+    groups = {}
+    for f in shared:
+        members = tuple(p for p in sorted(changes) if f["path"] in changes[p])
+        if members:
+            groups.setdefault(members, []).append(f)
+    shared_patches = {p: [] for p in roots}
+    for members, records in sorted(groups.items()):
+        packages = make_packages(out, base_url, "patch", "any", records, shared_sources, package_limit)
+        m["packages"].extend(packages)
+        for platform in members:
+            shared_patches[platform].extend(packages)
+    for platform, (records, specific, sources) in scanned.items():
+        snapshots = make_packages(out, base_url, "snapshot", platform, specific, sources, package_limit)
         m["packages"].extend(snapshots)
         launch = {"executable": "bin/Game.exe" if platform == "windows-x64" else "bin/Game", "working_directory": "bin", "args": [],
                   "environment": {} if platform == "windows-x64" else {"DXVK_WSI_DRIVER": "SDL3", "LD_LIBRARY_PATH": "${INSTALL_DIR}/bin"}}
-        target = {"launch": launch, "files": records, "snapshot_package_ids": [p["id"] for p in snapshots],
+        target = {"launch": launch, "files": records, "snapshot_package_ids": [p["id"] for p in shared_snapshots + snapshots],
                   "managed_user_dir_files": sorted(allowlist), "update_edges": []}
         if old and platform in old["platforms"]:
             prior = old["platforms"][platform]
-            previous_files = {f["path"]: f for f in prior["files"]}
-            changed = [f for f in records if previous_files.get(f["path"]) != f]
+            changed = [f for path, f in changes[platform].items() if path not in shared_sources]
             patches = make_packages(out, base_url, "patch", platform, changed, sources, package_limit)
             m["packages"].extend(patches)
-            target["update_edges"] = prior["update_edges"] + [{"from_sequence": old["release"]["sequence"], "to_sequence": sequence, "package_ids": [p["id"] for p in patches]}]
+            target["update_edges"] = prior["update_edges"] + [{"from_sequence": old["release"]["sequence"], "to_sequence": sequence, "package_ids": [p["id"] for p in shared_patches[platform] + patches]}]
             # Retain exact old opt-ins while advertised historical patch entries need them.
             target["managed_user_dir_files"] = sorted(set(allowlist) | set(prior["managed_user_dir_files"]))
             needed = {pid for edge in prior["update_edges"] for pid in edge["package_ids"]}
             for p in old["packages"]:
-                if p["id"] in needed:
+                if p["id"] in needed and not any(existing["id"] == p["id"] for existing in m["packages"]):
                     m["packages"].append(p)
                     shutil.copyfile(previous / (p["id"]+".zip"), out / (p["id"]+".zip"))
         m["platforms"][platform] = target
@@ -161,6 +190,36 @@ def build_release(*, out, version, sequence, roots, languages_dir, base_url, pre
         m["packages"].append(p)
         m["languages"][locale] = {"label": {"en": "English", "de": "Deutsch"}.get(locale, locale),
                                    "path": f["path"], "size": f["size"], "sha256": f["sha256"], "package_id": p["id"]}
+    if mods_dir:
+        for folder in sorted(Path(mods_dir).iterdir()):
+            require(folder.is_dir() and not folder.is_symlink() and not (getattr(folder.lstat(), "st_file_attributes", 0) & 0x400), "Mods input must contain ordinary mod folders")
+            mid = folder.name
+            require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", mid), "Mod folder must be a portable identifier (letters, digits, _ or -)")
+            records, sources = [], {}
+            for directory, dirs, names in os.walk(folder, followlinks=False):
+                for name in dirs:
+                    path = Path(directory, name)
+                    require(not path.is_symlink() and not (getattr(path.lstat(), "st_file_attributes", 0) & 0x400), "Linked mod directory rejected")
+                for name in sorted(names):
+                    path = Path(directory, name)
+                    rel = "MODs/"+mid+"/"+path.relative_to(folder).as_posix()
+                    managed_path(rel, {rel})
+                    records.append(file_record(path, rel, bool(path.stat().st_mode & 0o111)))
+                    sources[rel] = path
+            records.sort(key=lambda f: f["path"])
+            packages = make_packages(out, base_url, "mod", "any", records, sources, package_limit)
+            m["packages"].extend(packages)
+            m["mods"][mid] = {"label": mid, "files": records, "package_ids": [p["id"] for p in packages]}
+    # A content-addressed patch can recur after a file is reverted. Retain one
+    # package record even when several historical edges reference those bytes.
+    unique = {}
+    for package in m["packages"]:
+        prior = unique.get(package["id"])
+        if prior:
+            require(all(prior[field] == package[field] for field in ("kind", "platform", "size", "unpacked_size", "sha256", "files")), "Conflicting package identity")
+        if not prior or package["url"].startswith(base_url.rstrip("/") + "/"):
+            unique[package["id"]] = package
+    m["packages"] = list(unique.values())
     validate_payload(m)
     (out / "manifest.payload.json").write_bytes(stable_json(m))
     (out / "release-metadata.json").write_bytes(stable_json({"tool_version": TOOL_VERSION, "history": histories}))
@@ -245,6 +304,8 @@ def main():
     b.add_argument("--sequence", required=True, type=int)
     b.add_argument("--windows-root")
     b.add_argument("--linux-root")
+    b.add_argument("--shared-root", help="Common game files, packaged once for both platforms")
+    b.add_argument("--mods-dir", help="Optional downloadable mods, one folder per mod")
     b.add_argument("--previous-release")
     b.add_argument("--managed-user-file", action="append", default=[])
     b.add_argument("--exclude", action="append", default=[])
@@ -271,7 +332,7 @@ def main():
             timestamp = args.created_utc or datetime.fromtimestamp(int(os.environ.get("SOURCE_DATE_EPOCH", "0")), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             build_release(out=args.out, version=args.version, sequence=args.sequence, roots=roots,
                           languages_dir=args.languages_dir, base_url=args.base_url, previous=args.previous_release,
-                          allowlist=args.managed_user_file, exclude=args.exclude, created_utc=timestamp)
+                          allowlist=args.managed_user_file, exclude=args.exclude, shared_root=args.shared_root, mods_dir=args.mods_dir, created_utc=timestamp)
             print("Built and verified unsigned release:", args.out)
         elif args.command == "verify":
             verify_release(args.release_dir, {args.key_id: bytes.fromhex(args.public_key)})

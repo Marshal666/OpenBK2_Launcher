@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(OpenBK2Launcher VERSION 0.1.0 LANGUAGES C CXX)
+project(OpenBK2Launcher VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,7 +30,7 @@ obk_transfer_dependencies()
 add_library(launcher_core STATIC src/window_layout.cpp src/sha256.cpp src/signature.cpp src/manifest.cpp
   src/safe_files.cpp src/http_downloader.cpp src/zip_package_reader.cpp)
 target_sources(launcher_core PRIVATE src/local_state.cpp src/update_planner.cpp src/transaction.cpp src/installer.cpp)
-target_sources(launcher_core PRIVATE src/platform_services.cpp src/settings.cpp src/controller.cpp)
+target_sources(launcher_core PRIVATE src/platform_services.cpp src/settings.cpp src/controller.cpp src/mod_manager.cpp)
 target_include_directories(launcher_core PRIVATE ${CMAKE_BINARY_DIR}/generated)
 if(WIN32)
   target_link_libraries(launcher_core PRIVATE ole32 shell32 uuid)
@@ -103,6 +103,12 @@ if(BUILD_TESTING)
   add_test(NAME installer_recovery COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_SOURCE_DIR}/tests/integration/installer_recovery.py $<TARGET_FILE:installer_check>)
   set_tests_properties(installer_recovery PROPERTIES TIMEOUT 180)
+  add_executable(mod_check tests/core/mod_check.cpp)
+  target_link_libraries(mod_check PRIVATE launcher_core)
+  add_test(NAME shared_data_and_mods COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/tests/integration/shared_mods.py $<TARGET_FILE:installer_check>
+    $<TARGET_FILE:mod_check> $<TARGET_FILE:manifest_check>)
+  set_tests_properties(shared_data_and_mods PROPERTIES TIMEOUT 180)
   add_executable(fixture_game tests/core/fixture_game.cpp)
   target_link_libraries(fixture_game PRIVATE launcher_core)
   add_executable(lifecycle_check tests/core/lifecycle_check.cpp)

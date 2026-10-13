@@ -2,12 +2,15 @@
 
 Independent MIT-licensed C++20/CMake launcher and Python release toolkit. Installs,
 updates, repairs and launches signed game releases; preserves user files; supports
-offline Play, managed language switching and interrupted-update recovery. The GUI
+offline Play, managed language switching and interrupted-update recovery. Shared
+game data is packaged once for both platforms. An experimental Mods panel downloads
+signed optional mods and removes them into recoverable backups. The GUI
 uses SDL3 and Dear ImGui. No game code or game assets are included.
 
 Native Windows and Ubuntu 22.04 builds and fixture suites have been exercised.
 See [milestone reports](docs/MILESTONES.md), [acceptance results](docs/ACCEPTANCE.md)
-and [platform limitations](docs/PLATFORMS.md). The delivered executables are
+and [shared-data/mod results](docs/SHARED_DATA_AND_MODS.md), with
+[platform limitations](docs/PLATFORMS.md). The delivered executables are
 **fixture/development builds**. Production requires your HTTPS manifest endpoint
 and public verification key; no production trust values or private keys are bundled.
 

@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
-from fixture_builder import build_fixtures
+from shared_fixtures import build_shared_fixtures
 from test_workspace import temporary_workspace
 
 
@@ -61,7 +61,8 @@ def main():
                 wait_for(lambda: run(["xdotool", "getdisplaygeometry"]).returncode == 0, "Xvfb unavailable", process=xvfb)
                 start(["openbox", "--sm-disable"])
                 time.sleep(.5)
-            public = build_fixtures(temp / "fixtures", native_game=game).public_key().public_bytes_raw().hex()
+            private, _ = build_shared_fixtures(temp / "fixtures", game=game, count=1)
+            public = private.public_key().public_bytes_raw().hex()
             common = [binary, "--fixture-release", temp / "fixtures/release-1", "--fixture-public-key", public]
             result = run(common + ["--auto-install", "--config-dir", temp / "config", "--root", temp / "game",
                                    "--capture", artifacts / (args.backend+"-installed.bmp")])
@@ -127,6 +128,25 @@ def main():
                 click(955, 24)
                 assert process.wait(timeout=10) == 0
                 report["minimize_restore_close"] = "pass"
+                # Exercise the actual Mods controls against signed optional assets.
+                process = start(common + ["--config-dir", temp / "config", "--root", temp / "game"])
+                hwnd = wait_for(lambda: window("^OpenBK2 Launcher$"), "Installed launcher unavailable")
+                time.sleep(.8)
+                click(660, 24)
+                click(350, 230)  # Alpha Download; verified by files, not a UI-only state.
+                active = temp / "game/MODs/Alpha"
+                wait_for(lambda: (active / "assets/2.pak").exists(), "Mod Download control did not install Alpha")
+                (active / "user.cfg").write_bytes(b"preserved player edits")
+                time.sleep(.5)
+                click(285, 172)  # Installed Alpha / Remove.
+                time.sleep(.3)
+                click(310, 343)  # Confirm recoverable removal.
+                wait_for(lambda: not active.exists(), "Mod Remove control did not remove Alpha")
+                backups = list((temp / "game/.launcher/backups/removed-mods").glob("*/Alpha/user.cfg"))
+                assert len(backups) == 1 and backups[0].read_bytes() == b"preserved player edits"
+                report["mod_download_remove_preserves_edits"] = "pass"
+                process.terminate()
+                process.wait(timeout=10)
             (artifacts / (args.backend+"-results.json")).write_text(json.dumps(report, indent=2)+"\n")
             print(json.dumps(report))
         except Exception:

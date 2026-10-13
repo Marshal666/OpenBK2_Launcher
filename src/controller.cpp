@@ -76,6 +76,7 @@ void Controller::refresh_local(std::stop_token stop) {
     if (!std::filesystem::exists(settings.root)) {
         std::scoped_lock lock(mutex_);
         state_.installed.reset();
+        state_.mods.clear();
         state_.ready = false;
         state_.root_missing = settings.configured;
         state_.status = settings.configured ? "Installation folder is missing. Reselect it in Settings."
@@ -93,7 +94,9 @@ void Controller::refresh_local(std::stop_token stop) {
         append_log(config_, warning);
     auto local = load_local(installer.root(), keys_, policy_);
     const bool ready = local.installed && verify_installation(installer.root(), *local.installed, stop);
+    auto mods = ModManager(settings.root, keys_, policy_).list();
     std::scoped_lock lock(mutex_);
+    state_.mods = std::move(mods);
     state_.installed =
         local.installed ? std::make_shared<InstalledState>(std::move(*local.installed)) : nullptr;
     state_.ready = ready;
@@ -192,25 +195,13 @@ void Controller::install(InstallMode mode) {
         if (game_.running() || game_process_running(current.settings.root / utf8_path(profile.executable)))
             fail(ErrorCategory::GameRunning, "Close the game before changing game files");
         Installer installer(current.settings.root, keys_, policy_);
-        SafeRoot cache(current.settings.root / ".launcher/downloads", true);
-        DownloadOptions download_options;
-        download_options.policy = policy_;
-        HttpDownloader downloader(download_options);
         auto progress = [this](const Progress &p) {
             std::scoped_lock lock(mutex_);
             state_.progress = p;
             state_.ready = false;
         };
         auto fetch = [&](const PackageRecord &package, std::stop_token token, ProgressSink report) {
-#if OBK_FIXTURE_BUILD
-            if (options_.fixture_package_base.empty())
-                return utf8_path(options_.fixture_release) / utf8_path(package.id + ".zip");
-            auto resolved = package;
-            resolved.url = options_.fixture_package_base + "/" + package.id + ".zip";
-            return downloader.download(resolved, cache, token, report);
-#else
-            return downloader.download(package, cache, token, report);
-#endif
+            return fetch_package(package, current.settings.root, token, report);
         };
         InstallOptions install_options;
         install_options.mode = mode;
@@ -248,6 +239,52 @@ void Controller::install(InstallMode mode) {
             state_.exit_requested = launcher != executable_path();
         } else if (settings.shortcut)
             create_desktop_shortcut(launcher, desktop_directory());
+    });
+}
+std::filesystem::path Controller::fetch_package(const PackageRecord &package,
+                                                const std::filesystem::path &root, std::stop_token token,
+                                                ProgressSink report) {
+    auto resolved = package;
+#if OBK_FIXTURE_BUILD
+    if (options_.fixture_package_base.empty())
+        return utf8_path(options_.fixture_release) / utf8_path(package.id + ".zip");
+    resolved.url = options_.fixture_package_base + "/" + package.id + ".zip";
+#endif
+    SafeRoot cache(root / ".launcher/downloads", true);
+    DownloadOptions options;
+    options.policy = policy_;
+    return HttpDownloader(options).download(resolved, cache, token, report);
+}
+void Controller::download_mod(std::string id) {
+    work([this, id = std::move(id)](std::stop_token stop) {
+        const auto current = snapshot();
+        if (!current.ready || !current.latest || game_.running())
+            fail(ErrorCategory::Manifest,
+                 "A ready game and verified release are required; close the game first");
+        auto report = [this](const Progress &p) {
+            std::scoped_lock lock(mutex_);
+            state_.progress = p;
+        };
+        auto fetch = [&](const PackageRecord &package, std::stop_token token, ProgressSink progress) {
+            return fetch_package(package, current.settings.root, token, progress);
+        };
+        ModManager(current.settings.root, keys_, policy_)
+            .download(current.latest->envelope, id, fetch, stop, report);
+        refresh_local({});
+        std::scoped_lock lock(mutex_);
+        state_.status = "Mod installed: " + id;
+    });
+}
+void Controller::remove_mod(std::string id) {
+    work([this, id = std::move(id)](std::stop_token) {
+        const auto current = snapshot();
+        if (game_.running())
+            fail(ErrorCategory::GameRunning, "Close the game before removing a mod");
+        const auto backup = ModManager(current.settings.root, keys_, policy_).remove(id);
+        append_log(config_, "Removed mod preserved at: " + backup);
+        refresh_local({});
+        std::scoped_lock lock(mutex_);
+        state_.status = "Mod removed. Backup: " + backup;
     });
 }
 void Controller::play() {

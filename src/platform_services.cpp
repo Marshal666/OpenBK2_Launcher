@@ -277,6 +277,8 @@ void ChildProcess::start(const fs::path &executable, const fs::path &cwd,
 #endif
 }
 bool game_process_running(const fs::path &executable) {
+    // Signed paths use '/', while native Windows process image paths use '\\'.
+    const auto expected = fs::absolute(executable).lexically_normal().make_preferred();
 #ifdef _WIN32
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE)
@@ -292,7 +294,7 @@ bool game_process_running(const fs::path &executable) {
         DWORD size = static_cast<DWORD>(name.size());
         if (QueryFullProcessImageNameW(process, 0, name.data(), &size)) {
             name.resize(size);
-            found = CompareStringOrdinal(name.c_str(), -1, executable.c_str(), -1, TRUE) == CSTR_EQUAL;
+            found = CompareStringOrdinal(name.c_str(), -1, expected.c_str(), -1, TRUE) == CSTR_EQUAL;
         }
         CloseHandle(process);
         if (found)
@@ -307,7 +309,7 @@ bool game_process_running(const fs::path &executable) {
         if (name.empty() || name.find_first_not_of("0123456789") != name.npos)
             continue;
         auto target = fs::read_symlink(entry.path() / "exe", error);
-        if (!error && target == executable)
+        if (!error && target == expected)
             return true;
         error.clear();
     }

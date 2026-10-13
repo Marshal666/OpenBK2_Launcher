@@ -1,14 +1,14 @@
 # Platform builds and limitations
 
-The delivered binaries are fixture/development builds of version 0.1.0. Production
+The delivered binaries are fixture/development builds of version 0.2.0. Production
 builds require a real HTTPS endpoint, key identifier and Ed25519 public key at
 configure time. They do not contain an operational production release endpoint.
 
 | Target | Actual build and test environment | Result |
 |---|---|---|
-| Windows x64 | Windows 11, Visual Studio 2026/MSVC 19.51, CMake 4.3.1, MinSizeRel, static CRT | Native build, 9/9 CTest, native renderer, process/shortcut/relocation and offline fixture Play pass. |
-| Linux x86-64 | Ubuntu 22.04 VM, GCC 11.4.0, CMake 3.31.6/Ninja, MinSizeRel, glibc 2.35 baseline | Native build, 9/9 CTest, process/permissions/desktop-entry/relocation tests pass. |
-| X11 | Xvfb/Openbox/Zenity in Ubuntu VM | Real SDL X11 renderer and install; real pointer-driven folder callback, title drag, minimize/restore and close pass. |
+| Windows x64 | Windows 11, Visual Studio 2026/MSVC 19.51, CMake 4.3.1, MinSizeRel, static CRT | Native build, 10/10 CTest, shared installs, mod lifecycle, native renderer, process/shortcut/relocation and offline fixture Play pass. |
+| Linux x86-64 | Ubuntu 22.04 VM, GCC 11.4.0, CMake 3.31.6/Ninja, MinSizeRel, glibc 2.35 baseline | Native build, 10/10 CTest, shared installs, mod lifecycle, process/permissions/desktop-entry/relocation tests pass. |
+| X11 | Xvfb/Openbox/Zenity in Ubuntu VM | Real SDL X11 renderer and install; pointer-driven mod Download/Remove, preserved edits, folder callback, title drag, minimize/restore and close pass. |
 | Wayland | Weston 9 headless compositor with pixman | Real SDL Wayland renderer and fixture installation pass. Pointer/compositor interactions not tested. |
 | Windows 7 SP1 x64 | No VM run | **Current Windows artifact is incompatible:** imports `api-ms-win-core-synch-l1-2-0.dll` and WaitOnAddress/WakeByAddressAll through the modern C++ runtime. No verified Windows 7 support is claimed. |
 
@@ -21,12 +21,12 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 3,258,368 | 3.107 | `948c7362894f57db3607fbb1303f0046c6b0b6fec7f916a2763d56e5d8bee886` |
-| `OpenBK2Launcher-Linux-x64` | 8,036,720 | 7.664 | `6379ed26be142d04baef6b15f5b00681afd106598a2f19b412208f7be40a165f` |
+| `OpenBK2Launcher-Windows-x64.exe` | 3,302,912 | 3.150 | `652fc3e33d9d4e2591ded2361f5fcb4f47ee869ef2d28e8d7740f97aaaf426be` |
+| `OpenBK2Launcher-Linux-x64` | 8,073,648 | 7.700 | `1b895bd31b26a58126937696028133503171d9107d06e80ee17a7687adbb21ba` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/windows-binary-audit.json) and
-[Linux audit](results/linux-binary-audit.json). Application dependencies and
+[Windows audit](results/v02-windows-binary-audit.json) and
+[Linux audit](results/v02-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,

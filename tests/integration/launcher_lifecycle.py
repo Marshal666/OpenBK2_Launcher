@@ -10,6 +10,7 @@ import time
 import threading
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from fixture_builder import build_fixtures
+from shared_fixtures import build_shared_fixtures
 from test_workspace import temporary_workspace
 
 
@@ -127,6 +128,22 @@ def main():
         artifacts.mkdir(exist_ok=True)
         shutil.copyfile(capture, artifacts / "installed.bmp")
         shutil.copyfile(progress_capture, artifacts / "progress.bmp")
+        # Real controller + HTTP transfers + process exclusion for optional mods.
+        mod_key, mod_releases = build_shared_fixtures(temp / "shared-fixtures", game=game, count=1, hold_game=True)
+        release = mod_releases[0]
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            run(driver, "mods", temp / "mods-config", temp / "mods-game", release,
+                mod_key.public_key().public_bytes_raw().hex(), f"http://127.0.0.1:{server.server_port}")
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
+        retained = list((temp / "mods-game/.launcher/backups/removed-mods").glob("*/Alpha/user.cfg"))
+        assert len(retained) == 1 and retained[0].read_text() == "player edit"
+        assert (temp / "mods-game/MODs/Beta/readme.txt").exists()
     print(f"{checks} native command checks; offline Play, language persistence, cwd/argv, process exclusion, shortcut, handoff, collision and GUI install passed")
 
 
