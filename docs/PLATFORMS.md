@@ -21,18 +21,18 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 3,302,912 | 3.150 | `652fc3e33d9d4e2591ded2361f5fcb4f47ee869ef2d28e8d7740f97aaaf426be` |
-| `OpenBK2Launcher-Linux-x64` | 8,073,648 | 7.700 | `1b895bd31b26a58126937696028133503171d9107d06e80ee17a7687adbb21ba` |
+| `OpenBK2Launcher-Windows-x64.exe` | 3,305,472 | 3.152 | `a13a9cdafc134bba0166ad244b94936d11104e9a37ee3031bc54ab13cefc1b6b` |
+| `OpenBK2Launcher-Linux-x64` | 8,073,648 | 7.700 | `f810d85bcfc21ff8cf1086950a18a8296561c7d36bacf2d715ddf2ff3fbeb7e2` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/v02-windows-binary-audit.json) and
-[Linux audit](results/v02-linux-binary-audit.json). Application dependencies and
+[Windows audit](results/gui-polish-windows-binary-audit.json) and
+[Linux audit](results/gui-polish-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,
 IPHLPAPI, KERNEL32, USER32, GDI32, WINMM, IMM32, ole32, VERSION, ADVAPI32,
 SETUPAPI, SHELL32 and the synchronization API set mentioned above.
-[Exact imports](results/windows-binary-audit.imports.txt).
+[Exact imports](results/gui-polish-windows-binary-audit.imports.txt).
 
 Linux ELF dependencies are `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`,
 `libc.so.6` and the normal ELF loader. Highest required glibc symbol is **2.34**;
@@ -41,7 +41,7 @@ the tested distribution remains Ubuntu 22.04, not every distribution with glibc
 static. Native folder picking requires a supported desktop portal or installed
 dialog utility (Zenity was tested). `/usr/bin/env` supports desktop shortcut
 execution. TLS uses statically linked Ubuntu OpenSSL with the system CA store.
-[Imports](results/linux-binary-audit.imports.txt),
+[Imports](results/gui-polish-linux-binary-audit.imports.txt),
 [symbol versions](results/linux-symbol-versions.txt),
 [actual toolchain](results/linux-toolchain.txt).
 
@@ -50,6 +50,34 @@ version is recorded rather than represented as a final Python release. Windows
 tools used Python 3.13.7. CI requests Python 3.13; the declared supported tools
 baseline is Python 3.11+. Pinned cryptography/cffi/pycparser requirements were
 installed in both environments. The launcher has no dependency on this Python.
+
+## Window and Settings update
+
+The current artifacts also include rounded outer corners and corrected popup
+resizing. Windows uses a native window region; X11 uses the system X Shape
+extension through `libXext.so.6`; Wayland uses a transparent SDL window with
+clipped corner pixels. This works with the software renderer used by the native
+display checks. Settings starts at 900 by 560 logical units, bounded by the
+available window size. Settings and Mods retain their resized dimensions during
+the current launcher session. Closing the launcher resets these dimensions.
+
+Both native builds passed the three relevant CTest checks (`renderer_smoke`,
+`binary_size`, `launcher_lifecycle`): Windows in 12.91 seconds and Linux in
+15.00 seconds. The full 10-test results above are from the preceding shared-data
+and mods revision; the updater and publisher were unchanged by this GUI update.
+The [X11 input checks](results/gui-polish-x11-results.json) and
+[Wayland rendering check](results/gui-polish-wayland-results.json) also passed.
+An additional isolated X11 interaction check dragged Settings from 900 by 560 to
+780 by 490, released the mouse, and confirmed it retained that size in subsequent
+frames. Both initial setup and configured Settings were visually inspected at
+the default size and had no scrollbar. Smaller screens or manually reduced
+dialogs may still need scrolling.
+
+The native Windows region was queried: all four corner pixels are excluded and
+the center remains included. Windows mouse-driven resizing could not be tested
+reliably on the automation desktop; it was exercised through the same ImGui code
+on X11. Wayland pointer interactions and mixed-DPI monitor transitions remain
+unverified.
 
 ## Measurements
 

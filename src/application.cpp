@@ -2,6 +2,7 @@
 #include "../assets/hero.hpp"
 #include "font.hpp"
 #include "launcher/window_layout.hpp"
+#include "window_shape.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
@@ -46,6 +47,9 @@ struct ImGuiLifetime {
     }
 };
 SDL_HitTestResult SDLCALL hit_test(SDL_Window *window, const SDL_Point *point, void *) {
+    if (ImGui::GetCurrentContext() &&
+        ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
+        return SDL_HITTEST_NORMAL;
     int w = 0, h = 0;
     SDL_GetWindowSize(window, &w, &h);
     return window_layout(float(w), float(h), SDL_GetWindowDisplayScale(window))
@@ -114,6 +118,15 @@ bool action(const char *title, bool enabled, const char *explanation, ImVec2 siz
         ImGui::SetTooltip("%s", explanation);
     return clicked;
 }
+void popup_geometry(ImVec2 viewport, float scale, ImVec2 initial) {
+    const ImVec2 maximum{std::max(1.f, viewport.x - 24 * scale), std::max(1.f, viewport.y - 32 * scale)};
+    ImGui::SetNextWindowSize({std::min(initial.x * scale, maximum.x), std::min(initial.y * scale, maximum.y)},
+                             ImGuiCond_Once);
+    ImGui::SetNextWindowSizeConstraints({std::min(560 * scale, maximum.x), std::min(360 * scale, maximum.y)},
+                                        maximum);
+    // Position only on opening, so dragging the resize grip has a fixed origin.
+    ImGui::SetNextWindowPos({viewport.x * .5f, viewport.y * .5f}, ImGuiCond_Appearing, {.5f, .5f});
+}
 } // namespace
 int run_application(const ApplicationOptions &options) {
     SdlLifetime sdl;
@@ -127,6 +140,9 @@ int run_application(const ApplicationOptions &options) {
     Window window(SDL_CreateWindow("OpenBK2 Launcher", std::min(int(1000 * scale), usable.w),
                                    std::min(int(600 * scale), usable.h),
                                    SDL_WINDOW_BORDERLESS | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+#ifndef _WIN32
+                                       SDL_WINDOW_TRANSPARENT |
+#endif
                                        (options.smoke_test ? SDL_WINDOW_HIDDEN : 0)),
                   SDL_DestroyWindow);
     require(bool(window), "Create window");
@@ -134,6 +150,7 @@ int run_application(const ApplicationOptions &options) {
     require(bool(renderer), "Create renderer");
     SDL_SetRenderVSync(renderer.get(), 1);
     const bool drag_available = SDL_SetWindowHitTest(window.get(), hit_test, nullptr);
+    WindowShape shape;
     Surface artwork(SDL_CreateSurfaceFrom(art::width, art::height, SDL_PIXELFORMAT_ARGB8888,
                                           const_cast<std::uint32_t *>(art::hero.data()), art::width * 4),
                     SDL_DestroySurface);
@@ -228,6 +245,7 @@ int run_application(const ApplicationOptions &options) {
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         const float s = std::max(1.f, SDL_GetWindowDisplayScale(window.get()));
+        shape.update(window.get(), 10 * s);
         style.FontScaleDpi = s;
         ImGui::NewFrame();
         const auto size = ImGui::GetIO().DisplaySize;
@@ -332,9 +350,7 @@ int run_application(const ApplicationOptions &options) {
                             drag_available ? "" : "  |  Use the desktop window menu to move this window");
         ImGui::End();
         if (show_mods) {
-            ImGui::SetNextWindowPos({size.x * .5f, size.y * .5f}, ImGuiCond_Always, {.5f, .5f});
-            ImGui::SetNextWindowSize(
-                {std::min(710 * s, size.x - 24 * s), std::min(520 * s, size.y - 56 * s)});
+            popup_geometry(size, s, {710, 520});
             ImGui::OpenPopup("Mods###mods");
             if (ImGui::BeginPopupModal("Mods###mods", nullptr,
                                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
@@ -409,10 +425,10 @@ int run_application(const ApplicationOptions &options) {
             }
         }
         if (show_settings) {
-            ImGui::SetNextWindowPos({size.x * .5f, size.y * .5f}, ImGuiCond_Always, {.5f, .5f});
-            ImGui::SetNextWindowSize(
-                {std::min(710 * s, size.x - 24 * s), std::min(520 * s, size.y - 56 * s)});
+            popup_geometry(size, s, {900, 560});
             ImGui::OpenPopup("Setup###settings");
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {12, 6});
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {12, 6});
             if (ImGui::BeginPopupModal("Setup###settings", nullptr,
                                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
                 ImGui::TextUnformatted(t(state.settings.configured ? "Settings" : "Install OpenBK2"));
@@ -519,6 +535,7 @@ int run_application(const ApplicationOptions &options) {
                 ImGui::EndDisabled();
                 ImGui::EndPopup();
             }
+            ImGui::PopStyleVar(2);
         }
         if (closing && state.busy && !close_confirmed) {
             ImGui::OpenPopup("Close launcher?");
@@ -544,6 +561,7 @@ int run_application(const ApplicationOptions &options) {
         SDL_SetRenderDrawColor(renderer.get(), 9, 12, 16, 255);
         SDL_RenderClear(renderer.get());
         ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer.get());
+        shape.clip(renderer.get());
         if (!options.progress_capture.empty() && !progress_captured &&
             state.progress.stage == "Downloading" && state.progress.completed > 0) {
             Surface capture(SDL_RenderReadPixels(renderer.get(), nullptr), SDL_DestroySurface);
