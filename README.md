@@ -5,7 +5,7 @@ updates, repairs and launches signed game releases; preserves user files; suppor
 offline Play, managed language switching and interrupted-update recovery. Shared
 game data is packaged once for both platforms. An experimental Mods panel downloads
 signed optional mods and removes them into recoverable backups. The GUI
-uses SDL3 and Dear ImGui. No game code or game assets are included.
+uses SDL3 and Dear ImGui. No game code or playable game data is included.
 
 Native Windows and Ubuntu 22.04 builds and fixture suites have been exercised.
 See [milestone reports](docs/MILESTONES.md), [acceptance results](docs/ACCEPTANCE.md)
@@ -71,6 +71,15 @@ When creating a Linux desktop shortcut, the launcher writes its embedded PNG to
 `~/.local/share/openbk2-launcher/icon.png`) and references it in the desktop entry.
 The icon remains available when the launcher relocates. Existing shortcuts can
 be refreshed using **Settings → Create desktop shortcut**.
+
+The main artwork comes from `res/launcher_image.png`. After replacing it, use the
+same Pillow dependency above and run `python tools/create_artwork.py`. This writes
+`assets/hero.bmp`, which CMake embeds into the executable and SDL decodes directly.
+The original resolution and pixels are retained; no external image file or extra
+runtime image library is needed. The main view scales the image uniformly to fill
+roughly 90% of the area below the header, cropping excess edges around the center.
+Its title and installation status overlay the image. Play and Install/Update sit
+in the bottom-right action strip, alongside launcher and installed-game versions.
 
 ## Run a signed fixture
 

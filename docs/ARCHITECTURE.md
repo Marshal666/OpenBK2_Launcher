@@ -17,7 +17,8 @@ Decisions that narrow or adjust the specification:
 * Production trust is supplied at configure time. The user approved explicitly
   separate fixture builds until a real URL and public key are supplied. Fixture
   command-line trust, local archives and loopback HTTP do not exist in production
-  application flows. Development builds are visibly marked.
+  application flows. The main-screen development banner was removed at the user's
+  request; fixture trust and endpoints remain separated at compile time.
 * Managed relative archive paths use printable ASCII with conservative portable
   names. Selected root paths and JSON labels use UTF-8/native Unicode paths.
   This avoids incomplete Unicode normalization/case-fold defenses; see ADR 0002.
@@ -50,8 +51,11 @@ Decisions that narrow or adjust the specification:
   Mods remain user-editable and outside base repair ownership. A catalog change
   requires a new game release sequence; there is no second trust/update channel.
 
-The original embedded hero art and icon are code-generated project artwork.
-No upstream game artwork, executable or game data is redistributed here.
+The embedded icon and hero artwork come from the user-supplied `res/main.png` and
+`res/launcher_image.png`. Python/Pillow generates the checked-in icon resources
+and lossless hero BMP. CMake embeds the BMP, and SDL's existing BMP reader decodes
+it without adding an image library. Uniform cover scaling with centered cropping
+preserves its aspect ratio. No game executable or playable game data is bundled.
 
 Relevant contracts: [update protocol](UPDATE_PROTOCOL.md),
 [manifest v1](MANIFEST_V1.md), [manifest v2](MANIFEST_V2.md), [security](../SECURITY.md).

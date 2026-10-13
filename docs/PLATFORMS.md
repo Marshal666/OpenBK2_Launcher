@@ -21,18 +21,18 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 3,336,704 | 3.182 | `fa739335314435a60b38f2c97ab242e1ca387016c2c86ca34e805739d25aa76f` |
-| `OpenBK2Launcher-Linux-x64` | 8,090,032 | 7.715 | `db0121415c7d636bcc0c35c042df1ac540170421385188f1468de8291140c123` |
+| `OpenBK2Launcher-Windows-x64.exe` | 4,804,608 | 4.582 | `c6c2bb49091dac2c8ce9d39d9525a9307bf18b3aa38e88ed20a70b39cdd8cd11` |
+| `OpenBK2Launcher-Linux-x64` | 9,556,400 | 9.114 | `2f9b81ad4135dc31b6d409e80e70e35235db442cebfecae1cd7734136c3027e6` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/settings-page-windows-binary-audit.json) and
-[Linux audit](results/settings-page-linux-binary-audit.json). Application dependencies and
+[Windows audit](results/artwork-windows-binary-audit.json) and
+[Linux audit](results/artwork-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,
 IPHLPAPI, KERNEL32, USER32, GDI32, WINMM, IMM32, ole32, VERSION, ADVAPI32,
 SETUPAPI, SHELL32 and the synchronization API set mentioned above.
-[Exact imports](results/settings-page-windows-binary-audit.imports.txt).
+[Exact imports](results/artwork-windows-binary-audit.imports.txt).
 
 Linux ELF dependencies are `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`,
 `libc.so.6` and the normal ELF loader. Highest required glibc symbol is **2.34**;
@@ -41,7 +41,7 @@ the tested distribution remains Ubuntu 22.04, not every distribution with glibc
 static. Native folder picking requires a supported desktop portal or installed
 dialog utility (Zenity was tested). `/usr/bin/env` supports desktop shortcut
 execution. TLS uses statically linked Ubuntu OpenSSL with the system CA store.
-[Imports](results/settings-page-linux-binary-audit.imports.txt),
+[Imports](results/artwork-linux-binary-audit.imports.txt),
 [symbol versions](results/linux-symbol-versions.txt),
 [actual toolchain](results/linux-toolchain.txt).
 
@@ -122,7 +122,29 @@ Windows and Linux builds passed the three relevant CTest checks (`renderer_smoke
 `binary_size`, `launcher_lifecycle`) in 12.62 and 15.17 seconds, respectively.
 No updater or publishing logic changed. Mouse-driven Settings interaction was
 tested on X11; Windows and Wayland interaction and mixed-DPI behavior remain
-unverified. Artifact sizes remain 3.182 MiB and 7.715 MiB.
+unverified. That revision's artifact sizes were 3.182 MiB and 7.715 MiB.
+
+## Artwork and main-screen layout
+
+The current builds embed the supplied 994 by 560 `res/launcher_image.png` as a
+lossless BMP. Decoded pixels and dimensions were compared and match the source
+exactly. SDL's existing BMP reader avoids any additional runtime dependency.
+Centered cover scaling keeps a uniform aspect ratio and crops excess image edges.
+At 1000 by 600, the image occupies 492 of the 548 pixels below the header (89.8%);
+the remaining 56 pixels hold the action strip. Play and Install/Update are at its
+right, with the title and live installation status over the image above it.
+The footer shows the launcher version and, when installed, the game version in
+green. The campaign tagline and development banner have been removed as requested.
+
+Windows and Linux builds passed `renderer_smoke`, `binary_size` and
+`launcher_lifecycle` in 13.17 and 15.09 seconds. Main, Settings and active-download
+frames were visually inspected. X11 captures on 1000 by 600 and 800 by 600 desktops
+exercised cropping vertically and horizontally. Pointer-driven Play launched the
+native fixture in the correct directory; the relocated Update button advanced its
+signed installed sequence from 1 to 2. Settings navigation, discard and Save also
+passed. The [X11 input suite](results/artwork-x11-results.json) and
+[Wayland render/install check](results/artwork-wayland-results.json) passed.
+Windows and Wayland mouse interactions and mixed-DPI transitions remain unverified.
 
 ## Measurements
 

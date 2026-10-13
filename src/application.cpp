@@ -1,7 +1,7 @@
 #include "launcher/application.hpp"
-#include "../assets/hero.hpp"
 #include "../assets/launcher_icon.hpp"
 #include "font.hpp"
+#include "hero.hpp"
 #include "launcher/window_layout.hpp"
 #include "window_shape.hpp"
 #include <SDL3/SDL.h>
@@ -119,6 +119,55 @@ bool action(const char *title, bool enabled, const char *explanation, ImVec2 siz
     if (!enabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         ImGui::SetTooltip("%s", explanation);
     return clicked;
+}
+ImVec4 cover_uv(ImVec2 source, ImVec2 destination) {
+    const float scale = std::max(destination.x / source.x, destination.y / source.y);
+    const ImVec2 visible{destination.x / (source.x * scale), destination.y / (source.y * scale)};
+    return {(1 - visible.x) * .5f, (1 - visible.y) * .5f, (1 + visible.x) * .5f, (1 + visible.y) * .5f};
+}
+// Bottom-align status above the action strip. Long errors can scroll within this
+// transparent region without covering the header or hiding the action buttons.
+float installation_status(Controller *controller, const UiSnapshot &state, bool game, ImVec2 bottom_left,
+                          ImVec2 maximum_size, float scale) {
+    std::string text;
+    if (state.busy) {
+        const auto &p = state.progress;
+        text = p.stage + "\n" + bytes(p.completed) + " / " + bytes(p.total) + "  " +
+               bytes(std::uint64_t(std::max(0., p.bytes_per_second))) + "/s";
+    } else if (!state.error.empty())
+        text = state.error;
+    else
+        text = state.checking ? "Checking for updates..." : (game ? "Game is running" : state.status);
+    if (!state.busy && state.error.empty() && state.installed &&
+        state.settings.requested_language != state.installed->language)
+        text += "\nPending game language: " + state.settings.requested_language + ". Offline Play uses " +
+                state.installed->language + ".";
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {12, 6});
+    const float wrap = std::max(1.f, maximum_size.x - 16 * scale);
+    const float extra = state.busy ? ImGui::GetFrameHeightWithSpacing() + 14 * scale : 0;
+    const float height = std::min(
+        maximum_size.y, ImGui::GetTextLineHeightWithSpacing() +
+                            ImGui::CalcTextSize(text.c_str(), nullptr, false, wrap).y + extra + 8 * scale);
+    const float top = bottom_left.y - height;
+    ImGui::SetCursorPos({bottom_left.x, top});
+    if (ImGui::BeginChild("installation-status", {maximum_size.x, height}, ImGuiChildFlags_None,
+                          ImGuiWindowFlags_NoBackground)) {
+        ImGui::TextColored({.75f, .8f, .82f, 1}, "Installation status");
+        ImGui::PushTextWrapPos(0);
+        ImGui::TextColored(!state.busy && !state.error.empty() ? ImVec4(1, .65f, .5f, 1) : ImVec4(1, 1, 1, 1),
+                           "%s", text.c_str());
+        ImGui::PopTextWrapPos();
+        if (state.busy) {
+            const auto &p = state.progress;
+            if (p.total)
+                ImGui::ProgressBar(float(double(p.completed) / double(p.total)), {-1, 7 * scale}, "");
+            if (ImGui::SmallButton(tr(state.settings.requested_language, "Cancel")))
+                controller->cancel();
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    return top;
 }
 // Returns false when navigation or a submitted operation returns to the launcher.
 bool settings_page(SDL_Window *window, Controller &controller, const UiSnapshot &state, Settings &draft,
@@ -271,8 +320,7 @@ int run_application(const ApplicationOptions &options) {
     SDL_SetRenderVSync(renderer.get(), 1);
     const bool drag_available = SDL_SetWindowHitTest(window.get(), hit_test, nullptr);
     WindowShape shape;
-    Surface artwork(SDL_CreateSurfaceFrom(art::width, art::height, SDL_PIXELFORMAT_ARGB8888,
-                                          const_cast<std::uint32_t *>(art::hero.data()), art::width * 4),
+    Surface artwork(SDL_LoadBMP_IO(SDL_IOFromConstMem(embedded_hero_bmp, sizeof(embedded_hero_bmp)), true),
                     SDL_DestroySurface);
     require(bool(artwork), "Embedded artwork");
     Surface icon(SDL_CreateSurfaceFrom(art::icon::width, art::icon::height, SDL_PIXELFORMAT_RGBA32,
@@ -410,6 +458,12 @@ int run_application(const ApplicationOptions &options) {
         if (ImGui::Button("X", {42 * s, 36 * s}))
             closing = true;
         const bool game = controller && controller->game_running();
+        const float footer_height = std::max(56 * s, (size.y - 52 * s) * .1f);
+        const float footer_top = size.y - footer_height;
+        const float button_gap = 12 * s;
+        const float button_width = std::min(160 * s, std::max(1.f, (size.x - 64 * s - button_gap) * .5f));
+        const float buttons_width = 2 * button_width + button_gap;
+        const float buttons_left = size.x - 32 * s - buttons_width;
         if (show_settings) {
             ImGui::GetWindowDrawList()->AddLine({0, 52 * s}, {size.x, 52 * s},
                                                 ImGui::GetColorU32(ImGuiCol_Separator));
@@ -419,88 +473,66 @@ int run_application(const ApplicationOptions &options) {
             // A borderless content region keeps scrolling on small screens local
             // to the form, while the app header and footer stay in place.
             if (ImGui::BeginChild("settings-content",
-                                  {std::max(1.f, size.x - 64 * s), std::max(1.f, size.y - 108 * s)}))
+                                  {std::max(1.f, size.x - 64 * s), std::max(1.f, footer_top - 72 * s)}))
                 show_settings = settings_page(window.get(), *controller, state, draft, folder, dialog, game,
                                               pending_install);
             ImGui::EndChild();
             ImGui::PopStyleVar(2);
         } else {
-            const float bottom = std::max(220 * s, size.y - 165 * s);
+            const ImVec2 image_begin{0, 52 * s}, image_end{size.x, footer_top};
+            const ImVec2 image_size{image_end.x, image_end.y - image_begin.y};
+            const auto uv = cover_uv({float(artwork->w), float(artwork->h)}, image_size);
             auto *draw = ImGui::GetWindowDrawList();
-            draw->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(hero.get())), {0, 52 * s},
-                           {size.x, bottom});
-            draw->AddRectFilledMultiColor({0, 52 * s}, {size.x, bottom}, IM_COL32(4, 8, 12, 15),
-                                          IM_COL32(4, 8, 12, 15), IM_COL32(4, 8, 12, 235),
-                                          IM_COL32(4, 8, 12, 235));
-            ImGui::SetCursorPos({34 * s, bottom - 124 * s});
+            draw->AddImage(ImTextureRef(reinterpret_cast<ImTextureID>(hero.get())), image_begin, image_end,
+                           {uv.x, uv.y}, {uv.z, uv.w});
+            // Shade only the lower part so overlay text remains legible without
+            // obscuring the artwork across the rest of the content area.
+            draw->AddRectFilledMultiColor({0, std::max(image_begin.y, footer_top - 210 * s)}, image_end,
+                                          IM_COL32(4, 8, 12, 0), IM_COL32(4, 8, 12, 0),
+                                          IM_COL32(4, 8, 12, 245), IM_COL32(4, 8, 12, 245));
+            const float status_top =
+                installation_status(controller.get(), state, game, {buttons_left, footer_top - 16 * s},
+                                    {buttons_width, std::max(1.f, image_size.y - 32 * s)}, s);
             ImGui::PushFont(nullptr, 42);
+            const float title_width = ImGui::CalcTextSize("OPENBK2").x;
+            const float title_top =
+                buttons_left > title_width + 64 * s ? footer_top - 66 * s : status_top - 60 * s;
+            ImGui::SetCursorPos({32 * s, std::max(image_begin.y + 16 * s, title_top)});
             ImGui::TextUnformatted("OPENBK2");
             ImGui::PopFont();
-            ImGui::SetCursorPos({36 * s, bottom - 66 * s});
-            ImGui::TextUnformatted("Your next campaign starts here.");
-            ImGui::SetCursorPos({36 * s, bottom - 35 * s});
-            ImGui::TextColored({.5f, .85f, .7f, 1}, "%s",
-                               OBK_FIXTURE_BUILD ? "DEVELOPMENT BUILD  /  SIGNED FIXTURES"
-                                                 : "INDEPENDENT COMMUNITY LAUNCHER");
             const bool current = state.ready && state.latest && state.installed &&
                                  state.latest->sequence == state.installed->manifest.sequence &&
                                  state.settings.requested_language == state.installed->language;
-            ImGui::SetCursorPos({32 * s, bottom + 14 * s});
+            ImGui::SetCursorPos({buttons_left, footer_top + (footer_height - 44 * s) * .5f});
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.16f, .42f, .32f, 1));
             if (action(t("Play"), state.ready && !state.busy && !game,
                        "Finish installation or repair first; close an already running game",
-                       {160 * s, 44 * s}))
+                       {button_width, 44 * s}))
                 controller->play();
             ImGui::PopStyleColor();
-            ImGui::SameLine();
+            ImGui::SameLine(0, button_gap);
             const char *install_label = current ? "Up to date" : (state.installed ? "Update" : "Install");
             if (action(t(install_label),
                        !state.busy && !game && bool(state.latest) && !current && !state.root_missing,
-                       "A verified release and available game folder are required", {160 * s, 44 * s})) {
+                       "A verified release and available game folder are required", {button_width, 44 * s})) {
                 if (!state.settings.configured) {
                     load_draft();
                     show_settings = true;
                 } else
                     controller->install();
             }
-            ImGui::SameLine();
-            ImGui::BeginGroup();
-            if (state.installed)
-                ImGui::Text("%s  |  %s", state.installed->manifest.version.c_str(),
-                            state.installed->language.c_str());
-            else
-                ImGui::TextUnformatted("No managed installation");
-            ImGui::TextDisabled("%s", state.checking ? "Checking for updates..."
-                                                     : (game ? "Game is running" : state.status.c_str()));
-            ImGui::EndGroup();
-            ImGui::SetCursorPos({32 * s, bottom + 72 * s});
-            if (state.busy) {
-                const auto &p = state.progress;
-                ImGui::Text("%s  %s / %s  %s/s", p.stage.c_str(), bytes(p.completed).c_str(),
-                            bytes(p.total).c_str(),
-                            bytes(std::uint64_t(std::max(0., p.bytes_per_second))).c_str());
-                if (p.total)
-                    ImGui::ProgressBar(float(double(p.completed) / double(p.total)),
-                                       {size.x - 170 * s, 7 * s}, "");
-                else
-                    ImGui::TextDisabled("Working...");
-                ImGui::SameLine();
-                if (ImGui::SmallButton(t("Cancel")))
-                    controller->cancel();
-            } else if (!state.error.empty()) {
-                ImGui::PushTextWrapPos(size.x - 28 * s);
-                ImGui::TextColored({1, .65f, .5f, 1}, "%s", state.error.c_str());
-                ImGui::PopTextWrapPos();
-            } else if (state.installed && state.settings.requested_language != state.installed->language)
-                ImGui::TextWrapped("Pending game language: %s. Offline Play uses %s.",
-                                   state.settings.requested_language.c_str(),
-                                   state.installed->language.c_str());
-            else if (!state.ready)
-                ImGui::TextWrapped("%s", state.status.c_str());
         }
-        ImGui::SetCursorPos({32 * s, size.y - 27 * s});
-        ImGui::TextDisabled("v%s%s", OBK_VERSION,
-                            drag_available ? "" : "  |  Use the desktop window menu to move this window");
+        ImGui::SetCursorPos({32 * s, footer_top + (footer_height - ImGui::GetTextLineHeight()) * .5f});
+        ImGui::PushClipRect({0, footer_top}, {show_settings ? size.x : buttons_left - 12 * s, size.y}, true);
+        ImGui::TextDisabled("Launcher version: %s", OBK_VERSION);
+        if (!drag_available && ImGui::IsItemHovered())
+            ImGui::SetTooltip("Use the desktop window menu to move this window");
+        if (state.installed) {
+            ImGui::SameLine(0, 24 * s);
+            ImGui::TextColored({.5f, .85f, .7f, 1}, "Game version: %s",
+                               state.installed->manifest.version.c_str());
+        }
+        ImGui::PopClipRect();
         ImGui::End();
         if (show_mods) {
             popup_geometry(size, s, {710, 520});

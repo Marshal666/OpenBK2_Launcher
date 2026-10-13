@@ -1,2 +1,2 @@
-# Only needed to regenerate the checked-in assets after replacing res/main.png.
+# Only needed to regenerate icons or artwork after replacing the PNGs in res/.
 Pillow==12.3.0
