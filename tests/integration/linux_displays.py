@@ -121,11 +121,11 @@ def main():
                 after = geometry()
                 assert (before["X"], before["Y"]) != (after["X"], after["Y"]), (before, after)
                 report["title_drag"] = "pass"
-                click(900, 24)
+                click(after["WIDTH"] - 60, 24)  # Circular Minimize, anchored to the right edge.
                 wait_for(lambda: window("^OpenBK2 Launcher$") is None, "Minimize button failed")
                 run(["xdotool", "windowmap", hwnd, "windowactivate", "--sync", hwnd], check=True)
                 time.sleep(.3)
-                click(955, 24)
+                click(after["WIDTH"] - 24, 24)  # Circular Close.
                 assert process.wait(timeout=10) == 0
                 report["minimize_restore_close"] = "pass"
                 # Exercise the actual Mods controls against signed optional assets.

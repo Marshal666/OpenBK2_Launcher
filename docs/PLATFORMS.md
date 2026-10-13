@@ -21,18 +21,18 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 4,804,608 | 4.582 | `c6c2bb49091dac2c8ce9d39d9525a9307bf18b3aa38e88ed20a70b39cdd8cd11` |
-| `OpenBK2Launcher-Linux-x64` | 9,556,400 | 9.114 | `2f9b81ad4135dc31b6d409e80e70e35235db442cebfecae1cd7734136c3027e6` |
+| `OpenBK2Launcher-Windows-x64.exe` | 4,806,144 | 4.583 | `934752ffb7cd446db9e5360a647b4b6db813b0cb81153980c80d17aa3815a6a5` |
+| `OpenBK2Launcher-Linux-x64` | 9,556,400 | 9.114 | `c420aa42ee7d5e0735ce7ecc410b7a0f4982d6d430ee469b0bc6f1f471c0462e` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/artwork-windows-binary-audit.json) and
-[Linux audit](results/artwork-linux-binary-audit.json). Application dependencies and
+[Windows audit](results/window-controls-windows-binary-audit.json) and
+[Linux audit](results/window-controls-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,
 IPHLPAPI, KERNEL32, USER32, GDI32, WINMM, IMM32, ole32, VERSION, ADVAPI32,
 SETUPAPI, SHELL32 and the synchronization API set mentioned above.
-[Exact imports](results/artwork-windows-binary-audit.imports.txt).
+[Exact imports](results/window-controls-windows-binary-audit.imports.txt).
 
 Linux ELF dependencies are `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`,
 `libc.so.6` and the normal ELF loader. Highest required glibc symbol is **2.34**;
@@ -41,7 +41,7 @@ the tested distribution remains Ubuntu 22.04, not every distribution with glibc
 static. Native folder picking requires a supported desktop portal or installed
 dialog utility (Zenity was tested). `/usr/bin/env` supports desktop shortcut
 execution. TLS uses statically linked Ubuntu OpenSSL with the system CA store.
-[Imports](results/artwork-linux-binary-audit.imports.txt),
+[Imports](results/window-controls-linux-binary-audit.imports.txt),
 [symbol versions](results/linux-symbol-versions.txt),
 [actual toolchain](results/linux-toolchain.txt).
 
@@ -145,6 +145,23 @@ signed installed sequence from 1 to 2. Settings navigation, discard and Save als
 passed. The [X11 input suite](results/artwork-x11-results.json) and
 [Wayland render/install check](results/artwork-wayland-results.json) passed.
 Windows and Wayland mouse interactions and mixed-DPI transitions remain unverified.
+
+## Window controls update
+
+Minimize and Close use 28-unit circles with centered geometric symbols, hover
+feedback and localized tooltips. They remain anchored 10 units from the top and
+right window edges, with 8 units between circles and 58 units after Settings.
+Dimensions scale with the display DPI.
+
+Both builds passed `renderer_smoke`, `binary_size` and `launcher_lifecycle`
+(Windows: 13.78 seconds; Linux: 15.15 seconds). The layout was visually inspected
+on X11; its [native input suite](results/window-controls-x11-results.json) passed
+minimize/restore/close, title dragging, folder selection and mod controls.
+An additional X11 check verified Tab navigation and Space activation for
+Minimize and Close, including restoring the minimized window.
+The [Wayland check](results/window-controls-wayland-results.json) passed rendering
+and fixture installation. Windows/Wayland pointer interactions and mixed-DPI
+transitions remain unverified.
 
 ## Measurements
 

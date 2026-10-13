@@ -97,6 +97,7 @@ const char *tr(std::string_view locale, const char *english) {
         {"Cancel", "Abbrechen"},
         {"Browse", "Durchsuchen"},
         {"Save", "Speichern"},
+        {"Minimize", "Minimieren"},
         {"Close", "Schließen"},
         {"Check for updates", "Updates suchen"},
         {"Game language", "Spielsprache"},
@@ -118,6 +119,36 @@ bool action(const char *title, bool enabled, const char *explanation, ImVec2 siz
     ImGui::EndDisabled();
     if (!enabled && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         ImGui::SetTooltip("%s", explanation);
+    return clicked;
+}
+enum class WindowControl { Minimize, Close };
+bool window_control(const char *title, WindowControl control, ImVec2 position, float scale) {
+    const float diameter = 28 * scale;
+    ImGui::SetCursorPos(position);
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const bool clicked = ImGui::InvisibleButton(title, {diameter, diameter}, ImGuiButtonFlags_EnableNav);
+    const bool hovered = ImGui::IsItemHovered();
+    const bool held = ImGui::IsItemActive();
+    auto color = ImGui::GetColorU32(held && hovered ? ImGuiCol_ButtonActive
+                                    : hovered       ? ImGuiCol_ButtonHovered
+                                                    : ImGuiCol_Button);
+    if (control == WindowControl::Close && hovered)
+        color = ImGui::GetColorU32(held ? ImVec4(.52f, .12f, .15f, 1) : ImVec4(.7f, .18f, .22f, 1));
+    auto *draw = ImGui::GetWindowDrawList();
+    const ImVec2 center{origin.x + diameter * .5f, origin.y + diameter * .5f};
+    draw->AddCircleFilled(center, diameter * .5f, color);
+    const auto symbol = ImGui::GetColorU32(ImGuiCol_Text);
+    const float stroke = 1.5f * scale;
+    // Geometric glyphs keep both symbols centered, independent of font baselines.
+    if (control == WindowControl::Close) {
+        const float arm = 4 * scale;
+        draw->AddLine({center.x - arm, center.y - arm}, {center.x + arm, center.y + arm}, symbol, stroke);
+        draw->AddLine({center.x - arm, center.y + arm}, {center.x + arm, center.y - arm}, symbol, stroke);
+    } else {
+        const float arm = 5 * scale;
+        draw->AddLine({center.x - arm, center.y}, {center.x + arm, center.y}, symbol, stroke);
+    }
+    ImGui::SetItemTooltip("%s", title);
     return clicked;
 }
 ImVec4 cover_uv(ImVec2 source, ImVec2 destination) {
@@ -451,11 +482,11 @@ int run_application(const ApplicationOptions &options) {
             load_draft();
             show_settings = true;
         }
-        ImGui::SameLine();
-        if (ImGui::Button("_", {42 * s, 36 * s}))
+        // Anchor the small window controls separately from Mods and Settings.
+        // 10-unit outer inset, 28-unit circles and an 8-unit gap between them.
+        if (window_control(t("Minimize"), WindowControl::Minimize, {size.x - 74 * s, 10 * s}, s))
             SDL_MinimizeWindow(window.get());
-        ImGui::SameLine();
-        if (ImGui::Button("X", {42 * s, 36 * s}))
+        if (window_control(t("Close"), WindowControl::Close, {size.x - 38 * s, 10 * s}, s))
             closing = true;
         const bool game = controller && controller->game_running();
         const float footer_height = std::max(56 * s, (size.y - 52 * s) * .1f);

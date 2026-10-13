@@ -1,0 +1,8 @@
+{
+  "backend": "x11",
+  "rendered_fixture_install": "pass",
+  "native_folder_picker_callback": "pass",
+  "title_drag": "pass",
+  "minimize_restore_close": "pass",
+  "mod_download_remove_preserves_edits": "pass"
+}
