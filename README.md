@@ -128,6 +128,18 @@ files and back up modifications to managed files. A missing configured root asks
 for reselection. Do not remove `.launcher/transaction.json` or its staging/backups
 during recovery; see the [recovery protocol](docs/UPDATE_PROTOCOL.md).
 
+The default game folder is `~/Games/OpenBK2`: usually
+`C:/Users/<user>/Games/OpenBK2` on Windows and `/home/<user>/Games/OpenBK2` on Linux.
+You can choose another folder in Settings. A writable folder is required for
+installing, updating, managing mods and acquiring the Play lock. Windows Program
+Files is normally protected, so it is not the default; the launcher does not
+request administrator elevation.
+
+Displayed and saved paths use forward slashes. Windows folder input also converts
+typed or pasted backslashes, and older settings remain readable. Native Windows
+API calls retain the platform's required path format. On Linux, backslashes that
+are part of a filename are preserved, since only `/` separates directories.
+
 Settings/logs live under `%LOCALAPPDATA%/OpenBK2Launcher` or
 `$XDG_CONFIG_HOME/openbk2-launcher` (fallback `~/.config/openbk2-launcher`). Logs
 rotate at approximately 1 MiB and redact query values. Backups live inside the

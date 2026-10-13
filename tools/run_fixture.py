@@ -19,10 +19,10 @@ def main():
     public = json.loads((fixtures / "trusted-public-key.json").read_text(encoding="utf-8"))["public_key"]
     config.mkdir(parents=True, exist_ok=True)
     if not (config / "settings.json").exists():
-        settings = {"settings_schema_version": 1, "installation_root": str(game), "requested_language": "en",
+        settings = {"settings_schema_version": 1, "installation_root": game.as_posix(), "requested_language": "en",
                     "configured": False, "relocate": False, "shortcut": False}
         (config / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
-    print("Fixture game/config directory:", root, flush=True)
+    print("Fixture game/config directory:", root.as_posix(), flush=True)
     return subprocess.call([str(args.launcher.resolve(strict=True)), "--fixture-release", str(fixtures / "release-3"),
                             "--fixture-public-key", public, "--config-dir", str(config), "--root", str(game)])
 

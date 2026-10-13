@@ -76,6 +76,19 @@ void SDLCALL folder_selected(void *userdata, const char *const *files, int) {
     state.pending = false;
     state.complete = true;
 }
+int folder_path_edited(ImGuiInputTextCallbackData *data) {
+#ifdef _WIN32
+    // Normalize typed and pasted separators inside ImGui's active editing buffer.
+    for (int i = 0; i < data->BufTextLen; ++i)
+        if (data->Buf[i] == '\\') {
+            data->Buf[i] = '/';
+            data->BufDirty = true;
+        }
+#else
+    (void)data; // A backslash can be part of a Linux filename.
+#endif
+    return 0;
+}
 std::string bytes(std::uint64_t n) {
     char text[64];
     std::snprintf(text, sizeof(text), "%.1f MiB", double(n) / (1024 * 1024));
@@ -220,7 +233,8 @@ bool settings_page(SDL_Window *window, Controller &controller, const UiSnapshot 
     ImGui::BeginDisabled(state.busy);
     ImGui::TextUnformatted(t("Installation folder"));
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 135 * s);
-    ImGui::InputText("##folder", folder.data(), folder.size());
+    ImGui::InputText("##folder", folder.data(), folder.size(), ImGuiInputTextFlags_CallbackEdit,
+                     folder_path_edited);
     ImGui::SameLine();
     bool dialog_pending;
     {
@@ -444,8 +458,10 @@ int run_application(const ApplicationOptions &options) {
         {
             std::scoped_lock lock(dialog->mutex);
             if (dialog->complete) {
-                if (!dialog->path.empty())
-                    std::snprintf(folder.data(), folder.size(), "%s", dialog->path.c_str());
+                if (!dialog->path.empty()) {
+                    const auto text = path_utf8(utf8_path(dialog->path));
+                    std::snprintf(folder.data(), folder.size(), "%s", text.c_str());
+                }
                 dialog->complete = false;
             }
         }

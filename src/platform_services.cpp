@@ -28,7 +28,7 @@ extern char **environ;
 namespace launcher {
 namespace fs = std::filesystem;
 std::string path_utf8(const fs::path &path) {
-    auto value = path.u8string();
+    auto value = path.generic_u8string();
     return {value.begin(), value.end()};
 }
 std::string native_platform() {
@@ -448,7 +448,8 @@ void complete_handoff(const SafeRoot &config, const std::string &token) {
     auto doc = json::parse(config.read("handoff-" + token + ".json", 65536));
     auto value = yyjson_doc_get_root(doc.get());
     json::fields(value, {"source", "destination", "parent_pid", "sha256"});
-    const auto source = utf8_path(json::string(json::get(value, "source")));
+    // The handoff record uses '/', but Windows process APIs return native separators.
+    const auto source = utf8_path(json::string(json::get(value, "source"))).make_preferred();
     const auto destination = utf8_path(json::string(json::get(value, "destination")));
     const auto pid = json::number(json::get(value, "parent_pid"));
     const auto self = executable_path();

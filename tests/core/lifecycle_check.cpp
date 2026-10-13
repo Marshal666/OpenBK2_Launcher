@@ -23,6 +23,10 @@ int test_main(int argc, char **argv) {
         if (argc < 3)
             return 2;
         const std::string mode = argv[1];
+        if (mode == "path-text") {
+            std::cout << path_utf8(utf8_path(argv[2])) << '\n';
+            return 0;
+        }
         if (mode == "handoff-test") {
             SafeRoot config(utf8_path(argv[2]));
             check(argc == 5, "handoff args");

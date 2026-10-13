@@ -24,9 +24,26 @@ def main():
         checks += 1
         return result
     with temporary_workspace() as temp:
+        path_examples = (
+            [(r"C:\Users\Example\Games/OpenBK2", "C:/Users/Example/Games/OpenBK2"),
+             ("C:\\Games\\Žluťoučký", "C:/Games/Žluťoučký"),
+             (r"\\server\share\Game folder", "//server/share/Game folder")]
+            if os.name == "nt" else
+            [("/home/example/Games/Žluťoučký", "/home/example/Games/Žluťoučký"),
+             (r"/home/example/Game\folder", r"/home/example/Game\folder")]
+        )
+        for supplied, expected in path_examples:
+            assert run(driver, "path-text", supplied).stdout.rstrip("\n") == expected
         key = build_fixtures(temp / "fixtures", native_game=game).public_key().public_bytes_raw().hex()
         release = temp / "fixtures/release-1"
         root, config = temp / "Game with spaces Žluťoučký", temp / "config"
+        # Existing Windows settings with native separators must still load and
+        # be saved back with forward slashes without changing the selected root.
+        config.mkdir()
+        (config / "settings.json").write_text(json.dumps({
+            "settings_schema_version": 1, "installation_root": str(root),
+            "requested_language": "en", "configured": False, "relocate": False, "shortcut": False,
+        }), encoding="utf-8")
         run(driver, "online", config, root, release, key)
         assert (root / "Data/texts-de.pak").exists() and not (root / "Data/texts-en.pak").exists()
         run(driver, "offline", config, root, release, key)
@@ -36,6 +53,7 @@ def main():
             assert record[1:3] == ["SDL3", str(root / "bin")]
         config_json = json.loads((config / "settings.json").read_text(encoding="utf-8"))
         assert config_json["requested_language"] == "de"
+        assert config_json["installation_root"] == root.as_posix()
         # Verify native argument quoting without a shell and run from an unrelated cwd.
         arguments = ["two words", 'a"quoted"value', "ends\\", "Žluťoučký", "$(not-a-shell)"]
         executable = root / "bin" / ("Game.exe" if os.name == "nt" else "Game")

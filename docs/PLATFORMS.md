@@ -21,18 +21,18 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 4,806,144 | 4.583 | `934752ffb7cd446db9e5360a647b4b6db813b0cb81153980c80d17aa3815a6a5` |
-| `OpenBK2Launcher-Linux-x64` | 9,556,400 | 9.114 | `c420aa42ee7d5e0735ce7ecc410b7a0f4982d6d430ee469b0bc6f1f471c0462e` |
+| `OpenBK2Launcher-Windows-x64.exe` | 4,806,656 | 4.584 | `7ef39599636faea79a2dcf3673acab66da1126bb2deed952d46f591962832107` |
+| `OpenBK2Launcher-Linux-x64` | 9,556,400 | 9.114 | `a6bdd8e031f55d6d73b9c27fed9c48b407615b180a00095c9328ca84f6e19518` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/window-controls-windows-binary-audit.json) and
-[Linux audit](results/window-controls-linux-binary-audit.json). Application dependencies and
+[Windows audit](results/path-format-windows-binary-audit.json) and
+[Linux audit](results/path-format-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,
 IPHLPAPI, KERNEL32, USER32, GDI32, WINMM, IMM32, ole32, VERSION, ADVAPI32,
 SETUPAPI, SHELL32 and the synchronization API set mentioned above.
-[Exact imports](results/window-controls-windows-binary-audit.imports.txt).
+[Exact imports](results/path-format-windows-binary-audit.imports.txt).
 
 Linux ELF dependencies are `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`,
 `libc.so.6` and the normal ELF loader. Highest required glibc symbol is **2.34**;
@@ -41,7 +41,7 @@ the tested distribution remains Ubuntu 22.04, not every distribution with glibc
 static. Native folder picking requires a supported desktop portal or installed
 dialog utility (Zenity was tested). `/usr/bin/env` supports desktop shortcut
 execution. TLS uses statically linked Ubuntu OpenSSL with the system CA store.
-[Imports](results/window-controls-linux-binary-audit.imports.txt),
+[Imports](results/path-format-linux-binary-audit.imports.txt),
 [symbol versions](results/linux-symbol-versions.txt),
 [actual toolchain](results/linux-toolchain.txt).
 
@@ -162,6 +162,24 @@ Minimize and Close, including restoring the minimized window.
 The [Wayland check](results/window-controls-wayland-results.json) passed rendering
 and fixture installation. Windows/Wayland pointer interactions and mixed-DPI
 transitions remain unverified.
+
+## Path formatting update
+
+The default remains `~/Games/OpenBK2` on both platforms. Path text in Settings,
+saved settings and relocation records uses `/`; native Windows process-path
+verification still uses Windows separators. The folder field normalizes typed,
+pasted and picked Windows paths. Linux preserves literal backslashes in filenames.
+
+Both builds passed `renderer_smoke`, `binary_size` and `launcher_lifecycle`
+(Windows: 13.06 seconds; Linux: 15.06 seconds). Added lifecycle checks cover mixed
+Windows separators, Unicode, UNC path formatting, old settings rewritten with
+forward slashes, and preservation of Linux filename backslashes. Existing tests
+also passed real relocation/handoff cleanup, process launch, offline Play and
+shortcuts. UNC formatting was tested without accessing a network share.
+The [X11 suite](results/path-format-x11-results.json) passed, including native
+folder selection; the [Wayland check](results/path-format-wayland-results.json)
+passed rendering and fixture installation. Windows folder-picker interaction
+and typing/pasting into the Windows field were not exercised through native input.
 
 ## Measurements
 
