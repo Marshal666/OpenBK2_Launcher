@@ -1,72 +1,191 @@
-# Publisher toolkit
+# Publishing game releases
 
-Python 3.11+ and `python -m pip install -r tools/requirements.txt` are developer
-requirements only. No Python is bundled into or required by the launcher.
+This walkthrough takes you from an empty GitHub repository to a game release
+that the launcher can discover, download and update. Complete **Steps 1–8 once**,
+then use **Steps 9–12 for each later game update**.
 
-## What the input and output paths mean
+**The connection is a fixed manifest URL and a signing key.** Your production
+launcher is built with that URL and the public half of your key. Publishing
+uploads the game packages, then replaces the signed manifest at that same URL.
+On its next update check, the launcher reads it and offers Install or Update.
+There is no separate registration screen.
 
-The publisher takes **unpacked game files** as input. Use a shared folder for
-common files and a separate folder for each platform's files. Together, shared
-plus platform files must form a complete game installation. The publisher scans
-them and creates its own ZIP packages plus a signed manifest. There is no
-command to register arbitrary existing ZIP files or assign their URLs directly
-to launcher buttons.
+```mermaid
+flowchart TD
+    A[Unpacked game files] --> B[Build packages]
+    B --> C[Sign manifest with private key]
+    C --> D[Publish and verify public ZIPs]
+    D --> E[Update fixed manifest URL]
+    E --> F[Launcher checks URL and public key]
+    F --> G[Player clicks Install or Update]
+```
 
-| Argument / placeholder | Meaning | Concrete Windows example |
-|---|---|---|
-| `--shared-root <root>` | Optional common game files. Packaged once and referenced by both platforms. | `C:/OpenBK2-Publishing/input/shared` |
-| `--windows-root <root>` | Windows-only files in their game-relative layout, including `bin/Game.exe`. Without a shared root, supply a complete Windows installation. | `C:/OpenBK2-Publishing/input/windows` |
-| `--linux-root <root>` | Linux-only files in their game-relative layout, including `bin/Game`. Without a shared root, supply a complete Linux installation. | `C:/OpenBK2-Publishing/input/linux` |
-| `--mods-dir <mods>` | Optional downloadable mods, one subfolder per mod. These are separate from the base game. | `C:/OpenBK2-Publishing/input/mods` |
-| `--languages-dir <languages>` | Folder containing unpacked `texts-en.pak`, `texts-de.pak`, etc., directly inside it. At least one language is required. | `C:/OpenBK2-Publishing/input/languages` |
-| `--out <empty-output>` | Local release staging folder created/populated by `build`. It must be absent or empty and outside the shared/platform/mod input folders. | `C:/OpenBK2-Publishing/releases/0.1.0` |
-| `--release-dir <output>` | That same staging folder, reused by `sign`, `verify` and `publish-github`. | `C:/OpenBK2-Publishing/releases/0.1.0` |
-| `--previous-release <prior-output>` | The retained publisher output for the preceding release, including metadata and ZIPs. | `C:/OpenBK2-Publishing/releases/0.1.0` when building `0.2.0` |
-| `--base-url` | Future public URL prefix for this release's generated ZIPs. It is recorded in the manifest during `build`. | `https://github.com/YOUR_ACCOUNT/OpenBK2-Game-Releases/releases/download/v0.1.0` |
+> The supplied demo/CI executables are **fixture builds**. Step 7 creates the
+> production launcher that reads your public manifest. Uploading game files alone
+> does not connect a fixture executable to your repository.
 
-The roots are your release-preparation folders, not the launcher's source folder,
-not the `bin/` subfolder alone, and not a ZIP filename. They are also independent
-of the installation folder a player later chooses. A root-relative file such as
-`Data/base.pak` becomes `<player-selected-folder>/Data/base.pak`.
+Jump to [first-time setup](#first-time-setup), [your first release](#your-first-release),
+[later game data updates](#later-game-data-updates), or [troubleshooting](#troubleshooting).
+Detailed archive, language, profile and mod rules are in the
+[input reference](PUBLISHING_INPUTS.md).
 
-Keep these input/output folders outside the launcher checkout so game files do
-not become part of the launcher's source repository. Commands below run from
-the launcher checkout on Windows; on Linux substitute ordinary absolute paths,
-such as `/home/you/openbk2-publishing/input/windows`.
+## First time setup
 
-## Preparing bin.zip, data.zip, profiles.zip and extras.zip
+### Step 1 Create a public GitHub repository
 
-Suppose you have a Windows `bin.zip`, a Linux `bin.zip`, and the other archives
-are shared. Prepare the following folders before calling the publisher:
+For this walkthrough, use **one repository** named `OpenBK2-Game-Releases` for
+both game downloads and the manifest.
 
-| Your archive | Where its unpacked game files belong |
+1. Sign in to GitHub and choose **New repository**.
+2. Select your account or organization as the owner.
+3. Name it `OpenBK2-Game-Releases` and choose **Public**.
+4. Enable **Add a README file**, then create the repository.
+5. Confirm it has a `main` branch. If the branch has another name, use that name
+   for `$ManifestBranch` in Step 2.
+
+The README initializes the repository before the publisher creates its first
+release. See GitHub's [repository creation instructions](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository).
+
+You do not need to clone this new repository, enable GitHub Pages, upload game
+files to its Code tab, or create a release manually. The publisher uses the API.
+It creates releases and the manifest file, but **does not create repositories**.
+
+| Where | What goes there |
 |---|---|
-| Windows `bin.zip` | Only `input/windows/bin/`, including `Game.exe` and Windows DLLs. |
-| Linux `bin.zip` | Only `input/linux/bin/`, including `Game` and Linux libraries. |
-| `data.zip` | `input/shared/Data/`. Each shared file is supplied and hosted once. |
-| `profiles.zip` | Only required official baseline files in `input/shared/Profiles/`; see the opt-in rule below. Personal saves/settings must not be distributed as official files. |
-| `extras.zip` | Common extras in their game-relative locations under `input/shared/`, e.g. `Editor/` and `splash.bmp`. A Windows-only extra goes in the Windows tree only. |
+| Your existing launcher source checkout | The source code and `tools/release.py` |
+| GitHub Releases in the new repository | Generated game ZIP packages, grouped under tags such as `v0.1.0` |
+| The new repository's `main` branch | `manifest.envelope.json`, the signed pointer to the current game release |
+| A private folder on your computer | Your signing key; never uploaded |
 
-Inspect each archive's layout when extracting. If `data.zip` already contains
-`Data/base.pak`, extract it at the game root. If it contains `base.pak` directly,
-extract it into `Data/`. The final result must be `input/shared/Data/base.pak`,
-not `input/shared/Data/Data/base.pak` or `input/shared/Complete/Data/base.pak`.
-The ZIP's name does not determine installation paths.
+**You should now have:** a public repository containing a README on an existing
+branch. The manifest URL will return 404 until you complete Step 6.
 
-For example, the final preparation folders could look like this. Names such as
-`base.pak`, `WindowsOnly.dll`, `libLinuxOnly.so`, `editor.dat` and `official.dat`
-are illustrative; keep the actual filenames and paths the game expects.
+### Step 2 Prepare your local publishing workspace
+
+The commands below use **Windows PowerShell**, run from your launcher source
+checkout. Install Python 3.11 or newer, then confirm this command reports that
+version and install the toolkit dependencies:
+
+```powershell
+python --version
+python -m pip install -r tools/requirements.txt
+```
+
+If `python` opens the Microsoft Store or selects an older installation, use your
+Python 3.11+ executable instead for every Python command below. Python is needed
+only on the publishing computer; players do not need it.
+
+Set these values in the **same PowerShell window**, replacing `YOUR_ACCOUNT`:
+
+```powershell
+$Owner = "YOUR_ACCOUNT"
+$Repo = "OpenBK2-Game-Releases"
+$ManifestRepo = "$Owner/$Repo"
+$ManifestBranch = "main"
+$ManifestUrl = "https://raw.githubusercontent.com/$ManifestRepo/$ManifestBranch/manifest.envelope.json"
+$PublishingRoot = "$env:USERPROFILE/OpenBK2-Publishing"
+$KeyDir = "$env:USERPROFILE/OpenBK2-Secrets"
+$PrivateKey = "$KeyDir/release.pem"
+$KeyId = "release-key-2026-01"
+
+New-Item -ItemType Directory -Force -Path $KeyDir,
+    "$PublishingRoot/input/shared", "$PublishingRoot/input/windows",
+    "$PublishingRoot/input/linux", "$PublishingRoot/input/languages",
+    "$PublishingRoot/releases" | Out-Null
+```
+
+These folders live outside the launcher checkout. `$PublishingRoot` holds your
+prepared files and release outputs; it is separate from each player's chosen
+installation folder.
+
+Save the variable assignments as your publishing notes so you can restore them
+in a new shell. They contain paths and public identifiers, not key contents or
+tokens. A separate manifest repository is also supported: create and initialize
+it, then set `$ManifestRepo = "$Owner/OpenBK2-Manifest"` before setting the URL.
+
+**You should now have:** four empty input folders, a releases folder, and a
+separate secrets folder.
+
+### Step 3 Generate your signing key once
+
+Protect `$KeyDir` with restrictive Windows permissions before generating the
+key: in its **Properties > Security** settings, limit access to trusted accounts.
+The generated PEM is unencrypted, so its file permissions and backup matter.
+
+```powershell
+python tools/release.py keygen --output-private "$PrivateKey"
+```
+
+The command creates `release.pem` and prints `Public key:` followed by **64 hex
+characters**. Copy only those characters into this variable:
+
+```powershell
+$PublicKey = "PASTE_THE_64_HEX_CHARACTERS_HERE"
+```
+
+| Value | Purpose | Where it belongs |
+|---|---|---|
+| `release.pem` | Signs releases as coming from you | Private folder and secure backup |
+| `$PublicKey` | Lets launchers verify your signature | Publishing notes and production launcher build |
+| `$KeyId` | Identifies which trusted key signed the manifest | Same exact value in signing, verification and launcher build |
+| GitHub token | Permits uploads and manifest commits | Secret manager or current publishing process |
+
+The key ID is a label you choose; `release-key-2026-01` is ready to use.
+Back up the private key securely and save the public key and key ID. **Reuse
+this key for later releases.** Key generation refuses to overwrite an existing
+file or write inside this launcher repository. Do not rerun it for every update.
+Signing can also read the key path from `OPENBK2_SIGNING_KEY_FILE`.
+
+**You should now have:** one private PEM file, its public key, and a key ID. Never
+paste the PEM contents into a build command, GitHub file, or release asset.
+
+### Step 4 Create a GitHub publishing token
+
+In your GitHub account settings, open **Developer settings > Personal access
+tokens > Fine-grained tokens**, then generate a token with:
+
+1. The repository's account or organization as **Resource owner**.
+2. **Only select repositories**, including `OpenBK2-Game-Releases` and, if used,
+   your separate manifest repository.
+3. Repository permission **Contents: Read and write**.
+4. An expiration appropriate for your publishing schedule.
+
+Save the token in your secret manager. If an organization requires approval,
+wait until it approves the token. See GitHub's
+[token setup instructions](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+and the permissions for [release creation](https://docs.github.com/en/rest/releases/releases#create-a-release)
+and [file updates](https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents).
+
+When ready to publish, load it into the current shell without putting its value
+in command history:
+
+```powershell
+$TokenInput = Read-Host "Paste GitHub publishing token" -AsSecureString
+$env:GITHUB_TOKEN = [System.Net.NetworkCredential]::new("", $TokenInput).Password
+Remove-Variable TokenInput
+```
+
+The toolkit reads `GITHUB_TOKEN` directly; signing in to GitHub in your browser
+does not set it. Players receive neither this token nor your private key. All
+manifest and package URLs must be accessible without authentication.
+
+**You should now have:** upload access for this PowerShell session. No token is
+needed for building, signing, verification, or the publication dry run.
+
+## Your first release
+
+### Step 5 Prepare the unpacked game files
+
+Copy your actual built game files into the input folders. Together, `shared`
+plus each platform folder must make a complete installation for that platform.
+Here is a minimal layout; `base.pak` and the library names are examples:
 
 ```text
-C:/OpenBK2-Publishing/
+OpenBK2-Publishing/
   input/
     shared/
       Data/
         base.pak
-      Editor/
-        editor.dat
-      Profiles/
-        official.dat
       splash.bmp
     windows/
       bin/
@@ -79,268 +198,325 @@ C:/OpenBK2-Publishing/
     languages/
       texts-en.pak
       texts-de.pak
-    mods/
-      MyMod/
-        mod.pak
-        assets/
-          example.txt
-      AnotherMod/
-        mod.pak
   releases/
-    # build creates 0.1.0 here; do not copy source ZIPs into it
 ```
 
-Use ordinary files; symlinks and hardlinks are rejected. A file present only in
-the Linux root is Linux-only. A path present in `shared` must **not** also appear
-in a platform root: duplicate paths, case aliases and file/directory conflicts
-are rejected, even if their bytes match. There is no implicit override order.
-If the same path needs different bytes on Windows and Linux, remove it from
-`shared` and put the appropriate copy in each platform root instead.
+1. Extract common `data.zip` contents into `input/shared/Data/`, preserving the
+   game's paths. If the archive already contains `Data/`, extract at `shared/`
+   to avoid accidentally making `Data/Data/`.
+2. Extract the Windows `bin.zip` so the executable is
+   `input/windows/bin/Game.exe`. Extract the Linux one so its executable is
+   `input/linux/bin/Game`.
+3. Put common extras in their game-relative locations under `shared/`.
+4. Put language files directly in `input/languages/` as `texts-en.pak`,
+   `texts-de.pak`, etc. Supply at least one. They are installed under `Data/`.
+5. Check that no path in `shared/` also exists in a platform folder. Shared
+   files are packaged once and combined with the player's native platform.
 
-The launcher automatically combines the shared packages with its native
-platform's packages. Each shared ZIP has one URL and one record in the manifest;
-both targets reference it. Shared patches are also reused between platforms
-when they need the same changed files. Identical content is not automatically
-deduplicated across two platform roots: put it in the shared root explicitly.
+The publisher consumes **unpacked files** and generates its own ZIPs. The root
+is the folder containing `bin/`, not `bin/` itself. The current toolkit requires
+the executable names above and uses `bin/` as the working directory.
 
-Do not leave the original `bin.zip`, `data.zip`, etc. in the game roots unless
-the game itself actually needs those ZIP files installed. The publisher scans
-ordinary files; it does not recursively unpack a ZIP found inside a root.
+`Profiles/` and `MODs/` are excluded from base inputs unless you opt in exact
+official files. Before including `profiles.zip` or downloadable mods, follow
+the [profile and mod instructions](PUBLISHING_INPUTS.md#profiles-mods-and-language-files).
+Linux helper executables need their execute bits preserved; package on Linux
+if your Windows extraction process cannot preserve them.
 
-The current CLI generates launch profiles for **`bin/Game.exe` on Windows and
-`bin/Game` on Linux**, with `bin/` as the working directory. Supply those actual
-built game executables. Other executable names need an explicit publisher launch
-profile enhancement; there is currently no CLI override for them. The main
-executable is automatically marked executable. For other Linux executables,
-preserve their execute bits and package on Linux if your Windows filesystem or
-archive extraction tool cannot represent those permissions.
+**You should now have:** complete unpacked inputs, with real game executables
+and at least one language pack. A data-only folder is not a full release.
 
-## Profiles, MODs and language files
+### Step 6 Build sign and publish the first release
 
-`Profiles/` and `MODs/` are user-owned by default: their files are **excluded even
-when present in an input root**. If `Profiles/official.dat` is a required official
-baseline, explicitly add `--managed-user-file Profiles/official.dat` to `build`.
-Repeat the option for each exact official file; directory-wide opt-ins and
-wildcards are not supported. Do not opt in ordinary player saves or settings.
-The launcher preserves unknown files and backs up modified official files before
-replacing them.
+Run each block in order and stop if any command reports an error.
 
-The CLI applies the same explicit allowlist to both targets, so each allowlisted
-path must exist in each combined shared-plus-platform inventory. A shared
-official profile needs only one source copy and one opt-in. If no official
-profile files are required, omit `profiles.zip` from the release inputs and omit
-the option entirely. Empty folders are not packaged as payloads.
+**6a. Choose the game version and release number.** These are independent of the
+launcher version. The sequence is the increasing integer used to detect updates.
 
-Extract language packs into `input/languages/` as individual `texts-<locale>.pak`
-files. If `data.zip` includes them, copy those files into that folder: `Data/texts-*`
-is excluded from base snapshots automatically. The language folder must contain
-only these PAK files, not ZIPs, a `Data/` wrapper, or unrelated files. The player
-selects one managed language pack, and the launcher installs it under `Data/`.
-
-## Optional mod downloads
-
-Pass `--mods-dir "C:/OpenBK2-Publishing/input/mods"` for the example above.
-Each immediate subfolder becomes a catalog entry. `MyMod/mod.pak` is installed
-as `<game-root>/MODs/MyMod/mod.pak`; **do not add another `MODs/` wrapper** under
-the input folder. Loose assets work the same way. Mod IDs/folder names must use
-letters, digits, `_` or `-`, start with a letter or digit, and be at most 64
-characters. Empty mods, links and special files are rejected. The folder name
-is also its displayed label. This initial catalog serves the same mod bytes to
-Windows and Linux; platform-specific mod variants are not implemented.
-
-The publisher creates `mod-any-<sha256>.zip` archives and signs each mod's exact
-file inventory within the game manifest. They are uploaded and publicly verified
-alongside the game packages before the fixed manifest is updated. Normal game
-installation downloads no mod archives. Players open **Mods**, then **Download**.
-They must first update the game to the catalog's release and close the game.
-Only one mod folder can be present; remove the current one before downloading
-another. Existing manually added folders are listed too.
-
-**Remove** asks for confirmation, then moves the entire selected folder,
-including player edits and extra files, to
-`.launcher/backups/removed-mods/<unique-id>/<mod-id>/`. It does not delete it.
-To restore a backup manually, close the game and launcher, ensure `MODs` has no
-other mod folder, and move that folder back to `MODs/<mod-id>/`.
-Protected base-game folders cannot be removed through this control. Folders
-with unsafe paths or links require manual inspection. Backups use the same disk;
-archive old backups manually if the updater's 8 GiB retention limit is reached.
-
-Optional mods do **not** need `--managed-user-file`; they have their own signed
-ownership scope. Do not also put them in shared/platform roots as base files.
-Base-game repair and updates preserve downloaded mods and player edits. They
-do not automatically update or verify an edited mod. To obtain a changed mod,
-publish a new release sequence, update the game, then Remove and Download it.
-Every release catalog is complete: continue supplying `--mods-dir` to keep its
-entries downloadable. Omitting it removes catalog entries without deleting
-players' already installed folders. There is no mod editor or enable/disable UI.
-
-## Build, sign and verify the first release
-
-Replace `YOUR_ACCOUNT` with your GitHub account or organization, and choose your
-asset repository name before building. The following build command matches the
-example tree, including the hypothetical official profile file:
-
-```text
-python tools/release.py build --version 0.1.0 --sequence 1 --shared-root "C:/OpenBK2-Publishing/input/shared" --windows-root "C:/OpenBK2-Publishing/input/windows" --linux-root "C:/OpenBK2-Publishing/input/linux" --languages-dir "C:/OpenBK2-Publishing/input/languages" --mods-dir "C:/OpenBK2-Publishing/input/mods" --managed-user-file Profiles/official.dat --base-url https://github.com/YOUR_ACCOUNT/OpenBK2-Game-Releases/releases/download/v0.1.0 --created-utc 2026-10-13T08:00:00Z --out "C:/OpenBK2-Publishing/releases/0.1.0"
+```powershell
+$Version = "0.1.0"
+$Sequence = 1
+$Tag = "v$Version"
+$ReleaseDir = "$PublishingRoot/releases/$Version"
+$BaseUrl = "https://github.com/$Owner/$Repo/releases/download/$Tag"
+$CreatedUtc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 ```
 
-This is a local operation; it does not upload anything. The output contains
-`manifest.payload.json`, `release-metadata.json`, shared snapshots named
-`snapshot-any-<sha256>.zip`, platform snapshot ZIPs named
-`snapshot-windows-x64-<sha256>.zip` / `snapshot-linux-x64-<sha256>.zip`, and
-language ZIPs named `language-any-<sha256>.zip`, and optional mod ZIPs named
-`mod-any-<sha256>.zip`. The builder chooses package
-boundaries, so they need not match your original four source archives. `sign`
-adds `manifest.envelope.json`, which authenticates the exact payload bytes.
+**6b. Build locally.** The output directory must be absent or empty. PowerShell
+backticks continue the command onto the next line; do not add spaces after them.
 
-Shared data or mods select [manifest v2](MANIFEST_V2.md) and require launcher
-**0.2.0 or newer**, independently of the game version you choose. Launcher 0.2.0
-also accepts old v1 releases. Upgrade existing launchers manually before switching
-your fixed endpoint to v2; old launchers safely refuse the new schema. Without
-either new flag, a new release lineage still uses v1; a v2 lineage stays v2.
-
-For the first release, create a secure directory outside this checkout, for
-example `C:/OpenBK2-Secrets`, then generate a key once. The keygen parent directory
-must already exist. Save the printed public key; replace `PUBLIC_KEY_HEX` below
-with that 64-character hexadecimal value. Reuse this key for subsequent releases.
-
-```text
-python tools/release.py keygen --output-private "C:/OpenBK2-Secrets/release.pem"
-python tools/release.py sign --release-dir "C:/OpenBK2-Publishing/releases/0.1.0" --private-key "C:/OpenBK2-Secrets/release.pem" --key-id release-key-2026-01
-python tools/release.py verify --release-dir "C:/OpenBK2-Publishing/releases/0.1.0" --key-id release-key-2026-01 --public-key PUBLIC_KEY_HEX
+```powershell
+python tools/release.py build `
+    --version "$Version" --sequence $Sequence `
+    --shared-root "$PublishingRoot/input/shared" `
+    --windows-root "$PublishingRoot/input/windows" `
+    --linux-root "$PublishingRoot/input/linux" `
+    --languages-dir "$PublishingRoot/input/languages" `
+    --base-url "$BaseUrl" --created-utc "$CreatedUtc" `
+    --out "$ReleaseDir"
 ```
 
-Keep the private key outside Git, in a secure directory with restrictive ACLs
-on Windows / permissions on Linux. Back it up securely. The keygen command
-refuses existing files and repository destinations and prints only the public
-key. Signing also accepts `OPENBK2_SIGNING_KEY_FILE`; never pass key bytes on a
-command line. Production verification keys must be supplied independently,
-not taken from untrusted downloaded release metadata.
+If you only ship Windows, omit `--linux-root` in this and future builds. Keep
+every platform you support in every release. Add any profile, mod or exclusion
+options from the input reference consistently to each build.
 
-For mutable/generated files elsewhere, use `--exclude <glob>`, matching paths
-relative to each root, e.g. `--exclude "bin/*.log"`. Symlinks, reparse points,
-hardlinked regular files, reserved paths and output directories nested in source
-roots are rejected. Private source files are not auto-discovered outside supplied
-roots.
+Expected message: `Built and verified unsigned release:` followed by your output
+path. Nothing has been uploaded yet.
 
-## Subsequent releases and package limits
+**6c. Review, sign and verify.** Open `manifest.payload.json` in the output folder
+to review the version, sequence, file paths, launch profiles and download URLs.
+Then run these commands individually:
 
-Prepare the complete latest contents of the shared and platform roots, even when only a few
-files changed. Build into a **new** output directory with a new immutable tag,
-version and increasing sequence. For example:
-
-```text
-python tools/release.py build --version 0.2.0 --sequence 2 --shared-root "C:/OpenBK2-Publishing/input/shared" --windows-root "C:/OpenBK2-Publishing/input/windows" --linux-root "C:/OpenBK2-Publishing/input/linux" --languages-dir "C:/OpenBK2-Publishing/input/languages" --mods-dir "C:/OpenBK2-Publishing/input/mods" --managed-user-file Profiles/official.dat --base-url https://github.com/YOUR_ACCOUNT/OpenBK2-Game-Releases/releases/download/v0.2.0 --created-utc 2026-10-14T08:00:00Z --previous-release "C:/OpenBK2-Publishing/releases/0.1.0" --out "C:/OpenBK2-Publishing/releases/0.2.0"
+```powershell
+python tools/release.py sign --release-dir "$ReleaseDir" --private-key "$PrivateKey" --key-id "$KeyId"
+python tools/release.py verify --release-dir "$ReleaseDir" --key-id "$KeyId" --public-key "$PublicKey"
 ```
 
-Sign, verify and publish the new output as above. Retain the previous output;
-do not edit its generated ZIPs or manifests. The publisher
-validates all previous package bytes and computes SHA-256 differences, retains
-available earlier edges and assets, and tests each advertised route against the
-new final inventory. Previous-release metadata is a local publisher input,
-not a remote trust anchor. Do not take it from an untrusted third party.
+Verification should report:
+`Signature, packages, target inventories, and advertised chains verified`.
+Use the public key saved in Step 3, not a key supplied by a downloaded release.
 
-ZIP entries are sorted, use fixed 1980 timestamps and modes, and use deflate
-level 9. Filenames include the complete archive digest. `--created-utc` or
-`SOURCE_DATE_EPOCH` fixes payload timestamps (the fallback is the Unix epoch).
-Same toolchain/input yields identical ZIP and payload bytes; different zlib
-versions can change deflate output. Determinism is tested separately from
-Ed25519 authenticity. Packages are split below 1.5 GiB, reserving ZIP overhead.
-A single too-large file is rejected; no multipart-file mechanism is implied.
-
-## GitHub hosting and the launcher's endpoint
-
-Use an existing public asset repository, e.g. `YOUR_ACCOUNT/OpenBK2-Game-Releases`,
-and an existing manifest repository with a `main` branch, e.g.
-`YOUR_ACCOUNT/OpenBK2-Manifest`. These may be the same repository. The publisher
-creates/releases asset releases and updates the manifest file; it does not create
-repositories. Package and manifest URLs must be readable without a player's token.
-The default fixed endpoint uses raw GitHub content, so GitHub Pages setup is not
-required for this workflow.
-
-Publishing uses GitHub's REST API from Python. Set `GITHUB_TOKEN` through your
-secret manager or trusted CI environment. It needs Contents write access to the
-asset repository and the manifest repository. Public downloads never receive it.
-
-```text
-python tools/release.py publish-github --release-dir "C:/OpenBK2-Publishing/releases/0.1.0" --owner YOUR_ACCOUNT --repo OpenBK2-Game-Releases --tag v0.1.0 --manifest-repo YOUR_ACCOUNT/OpenBK2-Manifest --manifest-branch main --key-id release-key-2026-01 --public-key PUBLIC_KEY_HEX --dry-run
-```
-
-Dry-run fully verifies the local release and prints a plan without creating a
-network client or requiring a token. Remove `--dry-run` to publish. The default
-manifest path is `manifest.envelope.json`; `--manifest-path` can override it.
-The printed raw GitHub URL is the fixed endpoint to compile into the launcher.
-Build each new release with its immutable GitHub `--base-url` shown above.
-Historical patch URLs retain their original release tag.
-
-The resulting hosting layout is:
-
-| Location | Contents |
+| Output | Purpose |
 |---|---|
-| GitHub Release `OpenBK2-Game-Releases`, tag `v0.1.0` | Generated shared/platform snapshot, language and optional mod ZIP assets, with the exact names chosen by `build`. Later releases add patch assets. |
-| `OpenBK2-Manifest`, branch `main`, file `manifest.envelope.json` | Fixed signed endpoint pointing to the latest release's packages. |
-| Your local `C:/OpenBK2-Publishing/releases/0.1.0` | All publisher output retained for verification and building subsequent patches. |
+| `snapshot-*.zip`, `language-*.zip` | Full game and language download packages |
+| `manifest.payload.json` | Readable release description and inventories |
+| `manifest.envelope.json` | Signed manifest consumed by the launcher |
+| `release-metadata.json` | Local history used to build later updates |
 
-You do not upload your original four ZIPs as a substitute for the generated
-packages, and players do not need `release-metadata.json`. Do not rename/repack
-generated assets after signing: filenames, URLs, sizes and hashes are recorded
-in the signed payload. The publishing command handles the required upload order.
+Keep **the whole output folder**. Do not rename, repack or hand-edit generated
+files after signing.
 
-Finally, compile **both production launcher builds** with the same fixed URL,
-key ID and public key. For this example the configure command is:
+**6d. Preview publication.** Build an argument list so the dry run and live
+publication use the same settings:
 
-```text
-cmake -S . -B build/production -DOBK_FIXTURE_BUILD=OFF -DBUILD_TESTING=OFF -DOBK_MANIFEST_URL=https://raw.githubusercontent.com/YOUR_ACCOUNT/OpenBK2-Manifest/main/manifest.envelope.json -DOBK_KEY_ID=release-key-2026-01 -DOBK_PUBLIC_KEY_HEX=PUBLIC_KEY_HEX
+```powershell
+$PublishArgs = @(
+    "tools/release.py", "publish-github",
+    "--release-dir", $ReleaseDir,
+    "--owner", $Owner, "--repo", $Repo, "--tag", $Tag,
+    "--manifest-repo", $ManifestRepo, "--manifest-branch", $ManifestBranch,
+    "--key-id", $KeyId, "--public-key", $PublicKey
+)
+python @PublishArgs --dry-run
 ```
 
-Use the native Windows/Linux toolchain and MinSizeRel build/install commands from
-the [README](../README.md). For example, after the configure command above, a
-Windows Visual Studio build uses:
+Check that the plan lists your repository, `v0.1.0`, sequence `1`, and exactly
+`$ManifestUrl`. Dry-run verifies local files and prints the plan; it makes no
+network requests and cannot confirm your token or repository permissions.
 
-```text
+**6e. Publish.** With `GITHUB_TOKEN` set from Step 4, run:
+
+```powershell
+python @PublishArgs
+```
+
+The publisher creates a draft release, uploads the generated ZIPs, publishes the
+release, then downloads every advertised package anonymously to check its size
+and hash. **Only after those checks pass does it update the fixed manifest.** It
+then fetches and verifies that public manifest too. Allow time for this full
+download verification, especially with large game data.
+
+**You should now have:** a public `v0.1.0` release with generated ZIP assets and
+`manifest.envelope.json` on the manifest branch. Successful output contains
+`"dry_run":false`. Open `$ManifestUrl` in a signed-out browser: it should show
+JSON with `key_id`, `payload_b64` and `signature_b64`. That encoding is expected.
+
+### Step 7 Build the production launcher with your URL and public key
+
+This is the step that connects the app to your published game. Install the
+native build prerequisites from the [README](../README.md#build-and-test).
+In the same PowerShell session, configure a **separate production build**:
+
+```powershell
+cmake -S . -B build/production -A x64 `
+    -DOBK_FIXTURE_BUILD=OFF -DBUILD_TESTING=OFF `
+    "-DOBK_MANIFEST_URL=$ManifestUrl" `
+    "-DOBK_KEY_ID=$KeyId" `
+    "-DOBK_PUBLIC_KEY_HEX=$PublicKey"
 cmake --build build/production --config MinSizeRel --parallel 1
 cmake --install build/production --config MinSizeRel --prefix dist/production
 ```
 
-For a Linux Ninja build, add `-G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel` to configure,
-then build/install `build/production` on Linux. Fixture CI binaries intentionally use development
-configuration; publishing game assets does not automatically reconfigure them.
-Keep this manifest URL and trust key stable: future game releases only update
-the fixed signed envelope, and existing production launchers discover the new
-sequence without being rebuilt.
+This uses the installed Visual Studio generator. With VS 2022, add
+`-G "Visual Studio 17 2022"` to the configure command. With VS 2026, use
+`-G "Visual Studio 18 2026"` and a CMake version that supports it.
 
-The command authenticates the existing fixed envelope and checks sequence
-monotonicity, creates/resumes a draft release, uploads missing immutable assets,
-checks GitHub's upload digest, publishes the asset release, then independently
-streams every public package and verifies length/SHA-256. Only after all public
-assets pass does it update the fixed envelope using the current file SHA as a
-concurrency guard. It re-fetches and verifies the fixed public envelope last.
-Existing assets are never overwritten or deleted. An existing asset without an
-API digest is refused conservatively. Partial drafts can be resumed; a missing
-asset on an already published release requires a new immutable tag. A failure
-after attempting the fixed-envelope update is a **blocking publication incident**:
-even a lost PUT response can mean the update committed. The publisher retries
-transient public fetch failures and correctly signed stale CDN responses with
-bounded backoff; a different same/newer payload is never overwritten. If public
-verification still fails, inspect visibility and rerun the same verified release
-as a forward repair. Never publish an older sequence to hide the incident.
+Your Windows executable is
+`dist/production/OpenBK2Launcher-Windows-x64.exe`.
 
-## Release checklist
+For Linux, build natively on Linux using the README's prerequisites. In Bash,
+replace the three example trust values with the **same values** used on Windows:
 
-1. Build/test both native launchers, inspect OS dependencies and enforce 15 MiB.
-2. Assemble authorized built game roots, explicit mutable-file exclusions and
-   exact official MODs/Profiles opt-ins. Keep user files out of source inputs.
-3. Build against the prior verified local release and a new tag/sequence. Use a
-   fixed release timestamp. Verify snapshots, language packs and advertised chains.
-4. Sign with the offline/external key; verify with an independently trusted public
-   key. Review the payload, inventories, sizes and final launch profiles.
-5. Run publication dry-run, then publish using protected CI or a release account.
-6. Verify the public fixed endpoint and packages from another machine; run a
-   small authorized real-game installation before announcing the release.
-7. Retain earlier immutable patch assets while a latest manifest references them.
+```bash
+cmake -S . -B build/production -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel \
+    -DOBK_FIXTURE_BUILD=OFF -DBUILD_TESTING=OFF \
+    -DOBK_MANIFEST_URL="https://raw.githubusercontent.com/YOUR_ACCOUNT/OpenBK2-Game-Releases/main/manifest.envelope.json" \
+    -DOBK_KEY_ID="release-key-2026-01" \
+    -DOBK_PUBLIC_KEY_HEX="PASTE_THE_64_HEX_CHARACTERS_HERE"
+cmake --build build/production --parallel 4
+cmake --install build/production --prefix dist/production
+```
 
-API contracts: [releases](https://docs.github.com/en/rest/releases/releases),
-[assets](https://docs.github.com/en/rest/releases/assets), and
-[repository contents](https://docs.github.com/en/rest/repos/contents).
-Tests use a transport double with failures at every publication boundary; no
-live GitHub publication was performed during implementation.
+The Linux executable is `dist/production/OpenBK2Launcher-Linux-x64`.
+The private PEM and GitHub token are never CMake inputs.
+
+**You should now have:** production executables using your stable URL and trusted
+public key. Distribute these separately to players, with the project license,
+`THIRD_PARTY_NOTICES.md` and `licenses/`. The game publisher uploads game
+packages; it does not distribute or replace launcher executables.
+
+### Step 8 Confirm the player experience
+
+1. Run the production executable from `dist/production/`.
+2. Choose a fresh test installation folder and an available language.
+3. Let the startup update check finish. You can also use
+   **Settings > Check for updates**.
+4. Click **Install** and wait for verification to finish.
+5. Confirm the installed game version is `0.1.0`, then click **Play**.
+6. Repeat on each platform you intend to distribute, ideally on another machine
+   without publishing credentials.
+
+Keep this installation for the later update test. When finished publishing,
+remove the token from the current shell:
+
+```powershell
+Remove-Item Env:GITHUB_TOKEN
+```
+
+**First release complete:** players with your production launcher can now find
+and install your game through the fixed manifest URL.
+
+## Later game data updates
+
+Repeat these steps when changing game binaries, data, languages or the mod
+catalog. **Keep the same repository, manifest URL, private key, key ID and public
+key. Ordinary game updates do not require rebuilding the launcher.**
+
+### Step 9 Update the complete input folders
+
+Restore Step 2's variable assignments and Step 3's `$PublicKey` if you opened a
+new shell. Keep your previous release output intact.
+
+1. Replace changed files in `input/shared`, `input/windows`, `input/linux` and
+   `input/languages` as appropriate.
+2. Leave all unchanged files in those input folders.
+3. Remove a file from the base inputs only when it should leave the official
+   game installation. Updates can remove previously managed files; unrelated
+   player files are preserved and modified originals are backed up.
+4. Keep all supported languages and any desired mod catalog entries supplied.
+
+For example, to update `Data/base.pak`, replace
+`input/shared/Data/base.pak` and leave the rest of the inputs present. **Always
+build from the complete desired installation, even for a one-file update.**
+
+### Step 10 Build a new version with a higher sequence
+
+After `0.1.0` / sequence `1`, use a new version, tag and output folder:
+
+```powershell
+$PreviousRelease = "$PublishingRoot/releases/0.1.0"
+$Version = "0.1.1"
+$Sequence = 2
+$Tag = "v$Version"
+$ReleaseDir = "$PublishingRoot/releases/$Version"
+$BaseUrl = "https://github.com/$Owner/$Repo/releases/download/$Tag"
+$CreatedUtc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+python tools/release.py build `
+    --version "$Version" --sequence $Sequence `
+    --shared-root "$PublishingRoot/input/shared" `
+    --windows-root "$PublishingRoot/input/windows" `
+    --linux-root "$PublishingRoot/input/linux" `
+    --languages-dir "$PublishingRoot/input/languages" `
+    --base-url "$BaseUrl" --created-utc "$CreatedUtc" `
+    --previous-release "$PreviousRelease" `
+    --out "$ReleaseDir"
+```
+
+Use the same optional profile/mod/exclusion settings as the first release.
+`--previous-release` points to the **retained local output folder**, including
+its ZIPs and metadata. It is not a URL or the player's installation.
+
+This creates new full snapshots plus patches containing whole changed files.
+The launcher chooses a valid smaller patch route when available and otherwise
+uses snapshots. A changed large PAK is a whole changed file, not a byte-level
+delta. New players still receive a complete installation.
+
+### Step 11 Sign verify and publish the update
+
+Review the new payload, then run each command individually:
+
+```powershell
+python tools/release.py sign --release-dir "$ReleaseDir" --private-key "$PrivateKey" --key-id "$KeyId"
+python tools/release.py verify --release-dir "$ReleaseDir" --key-id "$KeyId" --public-key "$PublicKey"
+```
+
+**Recreate `$PublishArgs`** so it contains the new output path and tag. An old
+array would still point to the earlier release:
+
+```powershell
+$PublishArgs = @(
+    "tools/release.py", "publish-github",
+    "--release-dir", $ReleaseDir,
+    "--owner", $Owner, "--repo", $Repo, "--tag", $Tag,
+    "--manifest-repo", $ManifestRepo, "--manifest-branch", $ManifestBranch,
+    "--key-id", $KeyId, "--public-key", $PublicKey
+)
+python @PublishArgs --dry-run
+```
+
+The plan should now show `v0.1.1` and sequence `2`. Reload `GITHUB_TOKEN` using
+Step 4's hidden prompt, then publish:
+
+```powershell
+python @PublishArgs
+```
+
+**You should now have:** a new public release and a newly signed manifest at the
+**same URL** as before. The sequence, package inventory and URLs changed; the
+launcher's connection settings stayed the same.
+
+### Step 12 Test the update and retain its files
+
+1. Open your existing `0.1.0` test installation with the same production launcher.
+2. Close the game, then use **Settings > Check for updates**.
+3. Click **Update**. Confirm version `0.1.1` appears and **Play** works.
+4. Also test a fresh installation so you cover the new snapshots.
+5. Keep the new local release folder for the next `--previous-release` input.
+6. Keep older GitHub assets while the current manifest references them. Earlier
+   patch URLs can still point to older release tags.
+7. Clear `GITHUB_TOKEN` from the shell as at the end of Step 8.
+
+For the following release, use your latest retained output as the previous
+release and raise the sequence again. Never reuse a published sequence for
+different content. To undo a bad game change, restore the desired input bytes
+and publish them as another **new, higher sequence**.
+
+## Troubleshooting
+
+| What you see | What to check or do |
+|---|---|
+| Game assets exist on GitHub but the launcher sees no update | Complete `publish-github`, including the fixed manifest update. A Git tag, release, or uploaded ZIP alone is not registration. Check the launcher is a production build using that exact URL. |
+| `Development build: supply a signed fixture release and public key` | You opened a fixture executable. Build and run the Step 7 production executable. |
+| The manifest URL returns 404 | Before the first publication this is expected. Afterward, check repository visibility, branch and filename, including any separate manifest repository. |
+| GitHub returns 401, 403, or a repository API 404 | Check `GITHUB_TOKEN`, expiration, selected repositories, Contents write permission and organization approval. Branch/tag rules may also block the required commit or release. |
+| `Unknown signing key` or signature verification fails | Match the Step 3 key ID and public key across sign, verify and CMake. Confirm the PEM belongs to that public key. |
+| `Output directory must be empty` | Choose a fresh output directory. Preserve existing release outputs; do not build over them. |
+| `No package URL points to this release tag` | The build's `--base-url` must match the publishing owner, repository and immutable tag exactly. Rebuild into a fresh output folder and sign again. |
+| The launcher refuses an old or changed sequence | Use a sequence greater than every published one. Changing the version label alone is insufficient. |
+| Missing executable, duplicate path, or unexpected language input | Recheck Step 5 and the [input reference](PUBLISHING_INPUTS.md). Language files belong directly in the language folder; shared paths cannot overlap platform paths. |
+| `Latest release does not support this platform` | Include that platform's complete root in the next release, even if only shared data changed. |
+| Publication stopped during a draft upload | Fix the cause and rerun the same verified release. Matching assets can be reused; existing assets are never overwritten. |
+| A published release is missing a required asset | Use a new tag, higher sequence and fresh build. The publisher refuses to add missing assets to an already published release. |
+| `BLOCKING PUBLICATION INCIDENT` | The manifest may already have advanced, even if a response was lost. Inspect the public endpoint and rerun the same verified release to finish. Never publish an older sequence to conceal the failure. |
+
+If your private key is lost or needs replacing, distribute a new launcher with
+the new trust configuration; key rotation is not automatic. Launcher replacement
+and self-update are separate from game publishing. Coordinate an endpoint
+transition too: the publisher authenticates any existing manifest using the
+supplied trusted key before replacing it.
+
+For package limits, optional mods and exact file ownership rules, use the
+[input reference](PUBLISHING_INPUTS.md). For format and recovery details, see
+[manifest v2](MANIFEST_V2.md), the [update protocol](UPDATE_PROTOCOL.md), and the
+[security model](../SECURITY.md).

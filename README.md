@@ -14,6 +14,10 @@ and [shared-data/mod results](docs/SHARED_DATA_AND_MODS.md), with
 **fixture/development builds**. Production requires your HTTPS manifest endpoint
 and public verification key; no production trust values or private keys are bundled.
 
+**Publishing** Follow the [step-by-step publishing guide](docs/PUBLISHING.md)
+to create the GitHub repository and signing key, connect a production launcher,
+publish your first release, and ship later game-data updates.
+
 **Settings** opens in the main content area. **Back to launcher** returns without
 saving edits; **Save** saves the preferences and returns. Installation and repair
 actions return to the main screen to show progress. The first-run setup uses the
@@ -154,7 +158,8 @@ CTest renderer uses SDL's dummy backend, separately from the native display test
 * [Architecture and deviations](docs/ARCHITECTURE.md)
 * [Final developer report](docs/DEVELOPER_REPORT.md)
 * [Signed manifest contract](docs/MANIFEST_V1.md)
-* [Python publishing and release checklist](docs/PUBLISHING.md)
+* [Step-by-step publishing guide](docs/PUBLISHING.md)
+* [Publishing input and package reference](docs/PUBLISHING_INPUTS.md)
 * [Security guarantees and boundaries](SECURITY.md)
 * [Third-party licenses](THIRD_PARTY_NOTICES.md)
 
