@@ -1,0 +1,7 @@
+#pragma once
+namespace publisher_build {
+inline constexpr const char *source = R"obk(@CMAKE_SOURCE_DIR@)obk";
+inline constexpr const char *python = R"obk(@Python3_EXECUTABLE@)obk";
+inline constexpr const char *cmake = R"obk(@CMAKE_COMMAND@)obk";
+inline constexpr const char *generator = R"obk(@CMAKE_GENERATOR@)obk";
+}

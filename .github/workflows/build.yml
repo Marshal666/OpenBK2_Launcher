@@ -21,10 +21,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ninja-build pkg-config libssl-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxfixes-dev libxss-dev libwayland-dev libxkbcommon-dev libegl1-mesa-dev libgl1-mesa-dev wayland-protocols xvfb weston openbox xdotool zenity libglib2.0-bin
       - name: Configure Windows
         if: runner.os == 'Windows'
-        run: cmake -S . -B build/ci -G "Visual Studio 17 2022" -A x64 -DOBK_FIXTURE_BUILD=ON
+        run: cmake -S . -B build/ci -G "Visual Studio 17 2022" -A x64 -DOBK_FIXTURE_BUILD=ON -DOBK_BUILD_PUBLISHER=ON
       - name: Configure Linux
         if: runner.os == 'Linux'
-        run: cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DOBK_FIXTURE_BUILD=ON
+        run: cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel -DOBK_FIXTURE_BUILD=ON -DOBK_BUILD_PUBLISHER=ON
       - name: Build
         run: cmake --build build/ci --config MinSizeRel --parallel 2
       - name: Test

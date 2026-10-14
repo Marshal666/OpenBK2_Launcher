@@ -1,5 +1,9 @@
 # Publishing game releases
 
+For the desktop form with folder pickers and a single publishing button, see
+[OpenBK2 Publisher](PUBLISHER_GUI.md). The walkthrough below covers the equivalent
+command-line steps.
+
 This walkthrough takes you from an empty GitHub repository to a game release
 that the launcher can discover, download and update. Complete **Steps 1–8 once**,
 then use **Steps 9–12 for each later game update**.

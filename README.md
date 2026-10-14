@@ -22,6 +22,10 @@ Launcher 0.3 adds initial data and fast startup; see its
 to create the GitHub repository and signing key, connect a production launcher,
 publish your first release, and ship later game-data updates.
 
+Prefer a GUI? [OpenBK2 Publisher](docs/PUBLISHER_GUI.md) provides **First-time
+setup** and **New update** tabs, folder pickers, saved settings and one button to
+build, sign, verify and publish. It can also compile the native production launcher.
+
 **Settings** opens in the main content area. **Back to launcher** returns without
 saving edits; **Save** saves the preferences and returns. Installation and repair
 actions return to the main screen to show progress. The first-run setup uses the
@@ -198,6 +202,7 @@ CTest renderer uses SDL's dummy backend, separately from the native display test
 * [Final developer report](docs/DEVELOPER_REPORT.md)
 * [Signed manifest contract](docs/MANIFEST_V1.md)
 * [Step-by-step publishing guide](docs/PUBLISHING.md)
+* [Desktop publishing app](docs/PUBLISHER_GUI.md)
 * [Publishing input and package reference](docs/PUBLISHING_INPUTS.md)
 * [Security guarantees and boundaries](SECURITY.md)
 * [Third-party licenses](THIRD_PARTY_NOTICES.md)
