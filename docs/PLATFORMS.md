@@ -6,8 +6,8 @@ configure time. They do not contain an operational production release endpoint.
 
 | Target | Actual build and test environment | Result |
 |---|---|---|
-| Windows x64 | Windows 11, Visual Studio 2026/MSVC 19.51, CMake 4.3.1, MinSizeRel, static CRT | Native build, 10/10 CTest, shared installs, mod lifecycle, native renderer, process/shortcut/relocation and offline fixture Play pass. |
-| Linux x86-64 | Ubuntu 22.04 VM, GCC 11.4.0, CMake 3.31.6/Ninja, MinSizeRel, glibc 2.35 baseline | Native build, 10/10 CTest, shared installs, mod lifecycle, process/permissions/desktop-entry/relocation tests pass. |
+| Windows x64 | Windows 11, Visual Studio 2026/MSVC 19.51, CMake 4.3.1, MinSizeRel, static CRT | Native build; all 11 CTest checks passed across the full run and targeted recheck documented in the safety review. Shared installs, mod lifecycle, renderer, process/shortcut/relocation and offline fixture Play pass. |
+| Linux x86-64 | Ubuntu 22.04 VM, GCC 11.4.0, CMake 3.31.6/Ninja, MinSizeRel, glibc 2.35 baseline | Native build, 11/11 CTest, shared installs, mod lifecycle, process/permissions/desktop-entry/relocation tests pass. |
 | X11 | Xvfb/Openbox/Zenity in Ubuntu VM | Real SDL X11 renderer and install; pointer-driven mod Download/Remove, preserved edits, folder callback, title drag, minimize/restore and close pass. |
 | Wayland | Weston 9 headless compositor with pixman | Real SDL Wayland renderer and fixture installation pass. Pointer/compositor interactions not tested. |
 | Windows 7 SP1 x64 | No VM run | **Current Windows artifact is incompatible:** imports `api-ms-win-core-synch-l1-2-0.dll` and WaitOnAddress/WakeByAddressAll through the modern C++ runtime. No verified Windows 7 support is claimed. |
@@ -21,18 +21,18 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 4,806,656 | 4.584 | `a431a5ad26798653559cb81e70be7b4944db07d86a513ac9ba7a49f0758c430d` |
-| `OpenBK2Launcher-Linux-x64` | 9,556,400 | 9.114 | `bef7f01d8c178f805e2bd803f012bc5a1266098aa2e68321a1c99387c9b95dd7` |
+| `OpenBK2Launcher-Windows-x64.exe` | 4,809,728 | 4.587 | `8435baddf1e87eb46c81edfc46ad7611f5106120a41ba41df3322569d945b134` |
+| `OpenBK2Launcher-Linux-x64` | 9,560,496 | 9.118 | `7647b79c3e56f777558d36cad97c32b6a19dcef57c4d08d6c031d1cf17cee983` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/fixed-layout-windows-binary-audit.json) and
-[Linux audit](results/fixed-layout-linux-binary-audit.json). Application dependencies and
+[Windows audit](results/safety-audit-windows-binary-audit.json) and
+[Linux audit](results/safety-audit-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,
 IPHLPAPI, KERNEL32, USER32, GDI32, WINMM, IMM32, ole32, VERSION, ADVAPI32,
 SETUPAPI, SHELL32 and the synchronization API set mentioned above.
-[Exact imports](results/fixed-layout-windows-binary-audit.imports.txt).
+[Exact imports](results/safety-audit-windows-binary-audit.imports.txt).
 
 Linux ELF dependencies are `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`,
 `libc.so.6` and the normal ELF loader. Highest required glibc symbol is **2.34**;
@@ -41,7 +41,7 @@ the tested distribution remains Ubuntu 22.04, not every distribution with glibc
 static. Native folder picking requires a supported desktop portal or installed
 dialog utility (Zenity was tested). `/usr/bin/env` supports desktop shortcut
 execution. TLS uses statically linked Ubuntu OpenSSL with the system CA store.
-[Imports](results/fixed-layout-linux-binary-audit.imports.txt),
+[Imports](results/safety-audit-linux-binary-audit.imports.txt),
 [symbol versions](results/linux-symbol-versions.txt),
 [actual toolchain](results/linux-toolchain.txt).
 
@@ -197,6 +197,16 @@ Windows and Linux passed `renderer_smoke`, `binary_size` and `launcher_lifecycle
 in 13.36 and 15.33 seconds. The [X11 input suite](results/fixed-layout-x11-results.json)
 and [Wayland render/install check](results/fixed-layout-wayland-results.json)
 passed. Native Windows/Wayland wheel input and mixed-DPI behavior remain unverified.
+
+## Filesystem safety review
+
+The [2026-10-14 review](SECURITY_AUDIT.md) documents installation-root guards,
+in-place relocation, existing/running destination behavior, writer locking,
+missing-cache adoption and the Linux named-pipe fix. Linux passed all 11 CTest
+tests in one run; Windows passed all 11 across its full run and targeted follow-up.
+The review links the original logs, explains the sandbox TLS limitation and
+records the remaining safety boundaries. GUI pointer tests were not repeated
+for this core-logic change; renderer and complete fixture lifecycle tests passed.
 
 ## Measurements
 

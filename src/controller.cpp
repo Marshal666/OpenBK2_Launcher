@@ -73,6 +73,7 @@ void Controller::work(std::function<void(std::stop_token)> action) {
 }
 void Controller::refresh_local(std::stop_token stop) {
     const auto settings = snapshot().settings;
+    (void)checked_installation_directory(settings.root);
     if (!std::filesystem::exists(settings.root)) {
         std::scoped_lock lock(mutex_);
         state_.installed.reset();
@@ -171,8 +172,7 @@ void Controller::check_updates() {
 }
 void Controller::configure(Settings settings) {
     work([this, settings = std::move(settings)](std::stop_token stop) mutable {
-        if (!settings.root.is_absolute())
-            fail(ErrorCategory::Filesystem, "Choose an absolute installation folder");
+        settings.root = checked_installation_directory(settings.root);
         const auto before = snapshot().settings;
         if (before.root != settings.root)
             settings.configured = false;

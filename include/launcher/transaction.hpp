@@ -18,7 +18,9 @@ class Transaction {
     Transaction(const SafeRoot &root, const TrustedKeys &keys, ManifestPolicy policy = {},
                 FaultHook checkpoint = {}, ProgressSink progress = {})
         : root_(root), keys_(keys), policy_(policy), checkpoint_(std::move(checkpoint)),
-          progress_(std::move(progress)) {}
+          progress_(std::move(progress)) {
+        (void)checked_installation_directory(root.path());
+    }
     void prepare(const std::string &id, const LocalInstallation &old, const Manifest &target,
                  const std::string &platform, const std::string &language, const UpdatePlan &plan);
     TransactionResult recover();

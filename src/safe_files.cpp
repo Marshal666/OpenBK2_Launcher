@@ -22,6 +22,35 @@
 
 namespace launcher {
 namespace fs = std::filesystem;
+fs::path checked_installation_directory(const fs::path &root) {
+    if (root.empty() || !root.is_absolute() ||
+        root.native().find(fs::path::value_type{}) != root.native().npos)
+        fail(ErrorCategory::Filesystem, "Choose an absolute installation folder without null characters");
+#ifdef _WIN32
+    const auto text = root.generic_u8string();
+    if (text.starts_with(u8"//?/") || text.starts_with(u8"//./"))
+        fail(ErrorCategory::Filesystem, "Windows device-namespace installation paths are not supported");
+    for (const auto &part : root.relative_path()) {
+        const auto &name = part.native();
+        if (!name.empty() && name != L"." && name != L".." &&
+            (name.back() == L'.' || name.back() == L' ' || name.find(L':') != name.npos))
+            fail(ErrorCategory::Filesystem, "Installation folder contains an ambiguous Windows path");
+    }
+#endif
+    auto result = root.lexically_normal();
+    if (result.filename().empty() && result != result.root_path())
+        result = result.parent_path();
+    bool volume_root = result == result.root_path();
+#ifdef _WIN32
+    // std::filesystem treats the UNC server as root_name and the share as the
+    // first relative component, so a share root needs this additional check.
+    if (result.root_name().generic_u8string().starts_with(u8"//"))
+        volume_root = volume_root || result.relative_path() == result.relative_path().filename();
+#endif
+    if (volume_root)
+        fail(ErrorCategory::Filesystem, "Choose a dedicated game folder, not a filesystem or drive root");
+    return result;
+}
 namespace {
 #ifdef _WIN32
 using Handle = HANDLE;
@@ -209,6 +238,8 @@ void SafeFile::lock_exclusive() {
     // Windows read/write opens already deny write sharing for the handle lifetime.
 }
 SafeRoot::SafeRoot(fs::path root, bool create) : impl_(std::make_shared<Impl>()) {
+    if (root.native().find(fs::path::value_type{}) != root.native().npos)
+        fail(ErrorCategory::Filesystem, "Filesystem path contains a null character");
     impl_->root = fs::absolute(root).lexically_normal();
     if (impl_->root.filename().empty() && impl_->root != impl_->root.root_path())
         impl_->root = impl_->root.parent_path();
@@ -244,7 +275,9 @@ SafeFile SafeRoot::open(std::string_view relative, FileMode mode) const {
         io_error("Truncate file");
 #else
     const auto name = target.filename().native();
-    int flags = O_NOFOLLOW | O_CLOEXEC | (mode == FileMode::Read ? O_RDONLY : O_RDWR | O_CREAT);
+    // Opening a FIFO for reading can block before fstat gets a chance to reject
+    // it. O_NONBLOCK is ignored for regular files and makes special-file checks safe.
+    int flags = O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK | (mode == FileMode::Read ? O_RDONLY : O_RDWR | O_CREAT);
     if (mode == FileMode::CreateNew)
         flags |= O_EXCL;
     if (mode == FileMode::Append)

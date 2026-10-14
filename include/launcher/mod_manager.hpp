@@ -15,7 +15,7 @@ class ModManager {
 
   public:
     ModManager(std::filesystem::path root, TrustedKeys keys, ManifestPolicy policy = {})
-        : root_(std::move(root)), keys_(std::move(keys)), policy_(policy) {}
+        : root_(checked_installation_directory(root)), keys_(std::move(keys)), policy_(policy) {}
     std::vector<LocalMod> list() const;
     void download(std::string_view envelope, const std::string &id, PackageFetcher fetch,
                   std::stop_token stop = {}, ProgressSink progress = {}, FaultHook checkpoint = {});

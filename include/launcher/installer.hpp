@@ -21,7 +21,7 @@ class Installer {
 
   public:
     Installer(std::filesystem::path root, TrustedKeys keys, ManifestPolicy policy = {})
-        : root_(std::move(root), true), keys_(std::move(keys)), policy_(policy) {}
+        : root_(checked_installation_directory(root), true), keys_(std::move(keys)), policy_(policy) {}
     TransactionResult recover(FaultHook checkpoint = {}, ProgressSink progress = {});
     InstallResult install(std::string_view envelope, const std::string &platform, const std::string &language,
                           PackageFetcher fetch, InstallOptions options = {}, std::stop_token stop = {},

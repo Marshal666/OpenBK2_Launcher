@@ -134,6 +134,15 @@ def main():
         run(no_envelope)
         assert (no_envelope/"Data/removed.pak").exists()
         protected(no_envelope)
+        lost_metadata = clone("missing-all-metadata")
+        (lost_metadata / ".launcher").rename(root / "retained-old-metadata")
+        (lost_metadata / "Data/revised.pak").write_bytes(b"user edit without launcher metadata")
+        run(lost_metadata)
+        assert (lost_metadata / "Data/removed.pak").exists(), "Missing metadata authorized deletion"
+        assert any(p.read_bytes() == b"user edit without launcher metadata"
+                   for p in (lost_metadata / ".launcher/backups").rglob("*.pak"))
+        protected(lost_metadata)
+        run(lost_metadata, action="verify")
         run(chain, 1, expected=1, error="downgrade")
         no_space = clone("no-space")
         run(no_space, mode="no-space", expected=1, error="working space")

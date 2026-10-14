@@ -15,8 +15,7 @@ Settings load_settings(const SafeRoot &config) {
     fields(root, {"settings_schema_version", "installation_root", "requested_language", "configured",
                   "relocate", "shortcut"});
     require(number(get(root, "settings_schema_version")) == 1, "Unsupported settings schema");
-    result.root = utf8_path(string(get(root, "installation_root")));
-    require(result.root.is_absolute(), "Saved installation root is not absolute");
+    result.root = checked_installation_directory(utf8_path(string(get(root, "installation_root"))));
     result.requested_language = string(get(root, "requested_language"));
     for (const auto *field : {"configured", "relocate", "shortcut"})
         require(yyjson_is_bool(get(root, field)), "Invalid setting flag");
@@ -27,8 +26,9 @@ Settings load_settings(const SafeRoot &config) {
 }
 void save_settings(const SafeRoot &config, const Settings &s) {
     using json::quote;
+    const auto root = checked_installation_directory(s.root);
     config.write_atomic("settings.json",
-                        "{\"settings_schema_version\":1,\"installation_root\":" + quote(path_utf8(s.root)) +
+                        "{\"settings_schema_version\":1,\"installation_root\":" + quote(path_utf8(root)) +
                             ",\"requested_language\":" + quote(s.requested_language) +
                             ",\"configured\":" + (s.configured ? "true" : "false") +
                             ",\"relocate\":" + (s.relocate ? "true" : "false") +

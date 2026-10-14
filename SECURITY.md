@@ -25,7 +25,13 @@ delete user files or grant an unsigned receipt authority over game data.
 Modified and conflicting base originals are backed up before replacement.
 Deletion requires an authenticated prior inventory, not merely editable state.
 
-An OS writer lock covers recovery, updates and mod operations. A durable journal plus signed
+Installation paths must be absolute dedicated folders, not filesystem/drive/share
+roots. Embedded NULs and ambiguous Windows device/alias paths are rejected before
+game operations. Linux regular-file checks use nonblocking opens so a named pipe
+cannot hang the check. The `.launcher` subtree is reserved working storage;
+personal files do not belong in staging or cache directories.
+
+An OS writer lock covers recovery, updates, mod operations and launcher relocation. A durable journal plus signed
 inventories and verified backups supports repeatable commit or rollback. Play
 requires complete signed local state, matching files and no pending transaction.
 Cancellation is deferred during commit. Linux executable modes are restored;
@@ -56,4 +62,10 @@ feature. Do not include private keys, authentication tokens or personal game dat
 in public reports. Keep the affected launcher version, OS, redacted logs, and a
 minimal synthetic reproduction.
 
-See [acceptance results](docs/ACCEPTANCE.md) for measured coverage and limitations.
+Relocation leaves an executable already in the chosen game folder in place.
+A different destination executable is never overwritten; an active destination
+launcher blocks relocation. Source cleanup requires a validated handoff, parent
+exit and matching source bytes, and deletes only that source executable.
+
+See the [filesystem safety review](docs/SECURITY_AUDIT.md) and
+[acceptance results](docs/ACCEPTANCE.md) for measured coverage and limitations.

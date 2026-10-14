@@ -1,0 +1,15 @@
+{
+  "platform": "win32",
+  "checks": [
+    "already-in-game-folder: OpenBK2Launcher.exe",
+    "already-in-game-folder: Renamed Launcher.exe",
+    "identical-target-reuse-and-source-cleanup",
+    "different-target-never-overwritten",
+    "relocation-blocked-by-hold",
+    "relocation-blocked-by-hold-lock",
+    "failed-handoff-keeps-source-and-user-files",
+    "forged-handoff-cannot-delete-source",
+    "unsafe-saved-roots-rejected-before-use"
+  ],
+  "result": "pass"
+}

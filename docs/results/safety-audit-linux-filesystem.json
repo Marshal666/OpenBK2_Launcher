@@ -1,0 +1,16 @@
+{
+  "platform": "linux",
+  "checks": [
+    "already-in-game-folder: OpenBK2Launcher",
+    "already-in-game-folder: Renamed Launcher",
+    "identical-target-reuse-and-source-cleanup",
+    "different-target-never-overwritten",
+    "relocation-blocked-by-hold",
+    "relocation-blocked-by-hold-lock",
+    "failed-handoff-keeps-source-and-user-files",
+    "forged-handoff-cannot-delete-source",
+    "unsafe-saved-roots-rejected-before-use",
+    "fifo-rejected-without-blocking-or-deletion"
+  ],
+  "result": "pass"
+}

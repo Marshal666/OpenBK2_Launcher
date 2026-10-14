@@ -11,6 +11,9 @@ namespace launcher {
 inline std::filesystem::path utf8_path(std::string_view text) {
     return std::filesystem::path(std::u8string(text.begin(), text.end()));
 }
+// Validates the user's game directory without touching the filesystem. Never
+// permit a drive/filesystem/share root or a path with ambiguous native syntax.
+std::filesystem::path checked_installation_directory(const std::filesystem::path &root);
 enum class FileMode { Read, CreateNew, Append, Rewrite };
 class SafeFile {
     struct Impl;

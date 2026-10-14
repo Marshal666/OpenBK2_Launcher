@@ -355,6 +355,7 @@ bool game_process_running(const fs::path &executable) {
 }
 void GameLauncher::launch(const SafeRoot &root, const InstalledState &state) {
     std::scoped_lock guard(mutex_);
+    (void)checked_installation_directory(root.path());
     if (state.platform != native_platform())
         fail(ErrorCategory::UnsupportedPlatform, "Installed game is for a different platform");
     auto lock = root.open(".launcher/update.lock", FileMode::Append);
@@ -390,12 +391,17 @@ bool GameLauncher::running() {
 
 fs::path prepare_relocation(const SafeRoot &install, const SafeRoot &config,
                             const std::vector<std::string> &arguments) {
+    (void)checked_installation_directory(install.path());
     const auto source = executable_path();
+    std::error_code existing_error;
+    if (fs::equivalent(source.parent_path(), install.path(), existing_error) && !existing_error)
+        return source; // Already in the chosen folder, regardless of the executable's name.
     const auto name = native_platform() == "windows-x64" ? "OpenBK2Launcher.exe" : "OpenBK2Launcher";
     const auto destination = install.path() / name;
-    std::error_code existing_error;
     if (fs::equivalent(source, destination, existing_error) && !existing_error)
         return destination;
+    auto lock = install.open(".launcher/update.lock", FileMode::Append);
+    lock.lock_exclusive();
     SafeRoot source_root(source.parent_path());
     const auto source_name = path_utf8(source.filename());
     auto source_file = source_root.open(source_name, FileMode::Read);
@@ -405,6 +411,9 @@ fs::path prepare_relocation(const SafeRoot &install, const SafeRoot &config,
         if (sha256_file(file) != expected)
             fail(ErrorCategory::Filesystem,
                  "A different launcher already occupies the destination; original launcher remains usable");
+        if (game_process_running(destination))
+            fail(ErrorCategory::GameRunning,
+                 "A launcher is already running in the destination; close it before relocating");
     } else {
         const auto temp = ".launcher/relocate-" + unique_id();
         if (copy_verified(source_root, source_name, install, temp) != expected)

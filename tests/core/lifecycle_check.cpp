@@ -27,6 +27,19 @@ int test_main(int argc, char **argv) {
             std::cout << path_utf8(utf8_path(argv[2])) << '\n';
             return 0;
         }
+        if (mode == "hold") {
+            std::cout << "ready" << std::endl;
+            std::cin.get();
+            return 0;
+        }
+        if (mode == "hold-lock") {
+            SafeRoot root(checked_installation_directory(utf8_path(argv[2])));
+            auto lock = root.open(".launcher/update.lock", FileMode::Append);
+            lock.lock_exclusive();
+            std::cout << "ready" << std::endl;
+            std::cin.get();
+            return 0;
+        }
         if (mode == "handoff-test") {
             SafeRoot config(utf8_path(argv[2]));
             check(argc == 5, "handoff args");
@@ -34,9 +47,22 @@ int test_main(int argc, char **argv) {
             config.write_atomic("handoff-success", "yes");
             return 0;
         }
-        if (mode == "relocate") {
+        if (mode == "settings-root") {
+            SafeRoot config(utf8_path(argv[2]), true);
+            std::cout << path_utf8(load_settings(config).root) << '\n';
+            return 0;
+        }
+        if (mode == "safe-read") {
+            SafeRoot root(utf8_path(argv[2]));
+            auto file = root.open(argv[3], FileMode::Read);
+            return 0;
+        }
+        if (mode == "relocate" || mode == "relocate-no-ack") {
             SafeRoot config(utf8_path(argv[2]), true), destination(utf8_path(argv[3]), true);
-            prepare_relocation(destination, config, {"handoff-test", argv[2]});
+            const std::vector<std::string> args = mode == "relocate"
+                                                      ? std::vector<std::string>{"handoff-test", argv[2]}
+                                                      : std::vector<std::string>{"path-text", "no-ack"};
+            prepare_relocation(destination, config, args);
             return 0;
         }
         if (mode == "shortcut") {

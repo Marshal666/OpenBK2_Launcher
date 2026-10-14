@@ -119,6 +119,9 @@ if(BUILD_TESTING)
   target_link_libraries(fixture_game PRIVATE launcher_core)
   add_executable(lifecycle_check tests/core/lifecycle_check.cpp)
   target_link_libraries(lifecycle_check PRIVATE launcher_core)
+  add_test(NAME filesystem_safety COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/tests/integration/filesystem_safety.py $<TARGET_FILE:lifecycle_check>)
+  set_tests_properties(filesystem_safety PROPERTIES TIMEOUT 90)
   if(OBK_BUILD_GUI AND OBK_FIXTURE_BUILD)
     add_test(NAME launcher_lifecycle COMMAND ${Python3_EXECUTABLE}
       ${CMAKE_SOURCE_DIR}/tests/integration/launcher_lifecycle.py $<TARGET_FILE:lifecycle_check> $<TARGET_FILE:fixture_game> $<TARGET_FILE:OpenBK2Launcher>)

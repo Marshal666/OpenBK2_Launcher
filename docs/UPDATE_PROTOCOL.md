@@ -89,3 +89,15 @@ each operation has one atomic live change. Process-termination tests cover both
 sides of publication and removal. Physical power-loss behavior has not been tested.
 External programs that edit the installation without honoring the launcher lock
 can still race an operation; unexpected destination folders cause a safe failure.
+
+## Launcher relocation
+
+The selected game folder is validated before relocation. If the executable is
+already directly inside it, its current name and location are retained. Otherwise
+relocation holds the same installation writer lock, copies only to an unoccupied
+canonical launcher path or reuses a byte-identical existing copy, and refuses a
+different file or an already-running destination launcher. A nonce identifies
+the handoff record; source/destination identity, executable hashes and parent
+process identity are checked before acknowledgement. Only after the parent exits
+and the source still matches may that one source executable be removed. No source
+directory is deleted. Failure to acknowledge keeps the original executable usable.

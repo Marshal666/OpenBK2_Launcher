@@ -46,6 +46,7 @@ def main():
         }), encoding="utf-8")
         run(driver, "online", config, root, release, key)
         assert (root / "Data/texts-de.pak").exists() and not (root / "Data/texts-en.pak").exists()
+        assert not (root / ".launcher/downloads").exists(), "This fixture must test Play without a download cache"
         run(driver, "offline", config, root, release, key)
         record = (root / "bin/fixture-run.txt").read_text(encoding="utf-8").splitlines()
         assert Path(record[0]) == root / "bin"

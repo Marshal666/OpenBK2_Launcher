@@ -138,6 +138,11 @@ You can choose another folder in Settings. A writable folder is required for
 installing, updating, managing mods and acquiring the Play lock. Windows Program
 Files is normally protected, so it is not the default; the launcher does not
 request administrator elevation.
+Filesystem/drive/share roots are rejected; choose a dedicated game subfolder.
+An executable already in that folder is left in place. Relocation preserves a
+different existing launcher and refuses an already-running destination.
+See the [filesystem safety review](docs/SECURITY_AUDIT.md) for missing-cache,
+adoption and relocation behavior and the actual test results.
 
 Displayed and saved paths use forward slashes. Windows folder input also converts
 typed or pasted backslashes, and older settings remain readable. Native Windows
