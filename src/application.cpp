@@ -476,11 +476,15 @@ int run_application(const ApplicationOptions &options) {
         auto t = [&](const char *value) { return tr(locale, value); };
         ImGui::SetNextWindowPos({0, 0});
         ImGui::SetNextWindowSize(size);
+        // This is a fixed canvas. Only child panels may scroll; hidden scrollbars
+        // alone do not prevent wheel or keyboard navigation from moving the shell.
+        ImGui::SetNextWindowScroll({0, 0});
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
         ImGui::Begin("OpenBK2", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                         ImGuiWindowFlags_NoSavedSettings);
-        ImGui::PopStyleVar();
+                         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleVar(2);
         ImGui::SetCursorPos({24 * s, 14 * s});
         ImGui::TextUnformatted("OPENBK2");
         ImGui::SetCursorPos({size.x - 396 * s, 6 * s});

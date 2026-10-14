@@ -1,0 +1,6 @@
+{
+  "viewport": "800x480",
+  "main_wheel_scrolling_disabled": "pass",
+  "settings_header_footer_fixed": "pass",
+  "small_settings_scroll": "pass"
+}

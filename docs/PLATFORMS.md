@@ -21,18 +21,18 @@ The project does not require a separate VC++ runtime installer on current Window
 
 | Artifact | Bytes | MiB | SHA-256 |
 |---|---:|---:|---|
-| `OpenBK2Launcher-Windows-x64.exe` | 4,806,656 | 4.584 | `7ef39599636faea79a2dcf3673acab66da1126bb2deed952d46f591962832107` |
-| `OpenBK2Launcher-Linux-x64` | 9,556,400 | 9.114 | `a6bdd8e031f55d6d73b9c27fed9c48b407615b180a00095c9328ca84f6e19518` |
+| `OpenBK2Launcher-Windows-x64.exe` | 4,806,656 | 4.584 | `a431a5ad26798653559cb81e70be7b4944db07d86a513ac9ba7a49f0758c430d` |
+| `OpenBK2Launcher-Linux-x64` | 9,556,400 | 9.114 | `bef7f01d8c178f805e2bd803f012bc5a1266098aa2e68321a1c99387c9b95dd7` |
 
 Both are below the 10 MiB target and 15 MiB enforced maximum. See
-[Windows audit](results/path-format-windows-binary-audit.json) and
-[Linux audit](results/path-format-linux-binary-audit.json). Application dependencies and
+[Windows audit](results/fixed-layout-windows-binary-audit.json) and
+[Linux audit](results/fixed-layout-linux-binary-audit.json). Application dependencies and
 assets are statically linked/embedded; Python is developer-side only.
 
 Windows imports ordinary system libraries: bcrypt, CRYPT32, Secur32, WS2_32,
 IPHLPAPI, KERNEL32, USER32, GDI32, WINMM, IMM32, ole32, VERSION, ADVAPI32,
 SETUPAPI, SHELL32 and the synchronization API set mentioned above.
-[Exact imports](results/path-format-windows-binary-audit.imports.txt).
+[Exact imports](results/fixed-layout-windows-binary-audit.imports.txt).
 
 Linux ELF dependencies are `libstdc++.so.6`, `libm.so.6`, `libgcc_s.so.1`,
 `libc.so.6` and the normal ELF loader. Highest required glibc symbol is **2.34**;
@@ -41,7 +41,7 @@ the tested distribution remains Ubuntu 22.04, not every distribution with glibc
 static. Native folder picking requires a supported desktop portal or installed
 dialog utility (Zenity was tested). `/usr/bin/env` supports desktop shortcut
 execution. TLS uses statically linked Ubuntu OpenSSL with the system CA store.
-[Imports](results/path-format-linux-binary-audit.imports.txt),
+[Imports](results/fixed-layout-linux-binary-audit.imports.txt),
 [symbol versions](results/linux-symbol-versions.txt),
 [actual toolchain](results/linux-toolchain.txt).
 
@@ -180,6 +180,23 @@ The [X11 suite](results/path-format-x11-results.json) passed, including native
 folder selection; the [Wayland check](results/path-format-wayland-results.json)
 passed rendering and fixture installation. Windows folder-picker interaction
 and typing/pasting into the Windows field were not exercised through native input.
+
+## Fixed main-window scrolling
+
+The main canvas now has zero padding, disables mouse-wheel scrolling and resets
+both scroll offsets before layout. Previously its hidden scrollbars still allowed
+the padded footer to create overflow, moving widgets while the artwork stayed put.
+Child panels retain independent scrolling.
+
+The previous binary reproduced the movement using native X11 wheel input. With
+the fix, [1000 by 600 frame comparisons](results/fixed-layout-scroll-1000x600.json)
+were pixel-identical after scrolling over the image, header, footer and status
+area. The same checks passed at [800 by 480](results/fixed-layout-scroll-800x480.json),
+where Settings content still scrolled while its header and footer stayed fixed.
+Windows and Linux passed `renderer_smoke`, `binary_size` and `launcher_lifecycle`
+in 13.36 and 15.33 seconds. The [X11 input suite](results/fixed-layout-x11-results.json)
+and [Wayland render/install check](results/fixed-layout-wayland-results.json)
+passed. Native Windows/Wayland wheel input and mixed-DPI behavior remain unverified.
 
 ## Measurements
 
