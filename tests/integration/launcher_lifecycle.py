@@ -101,13 +101,29 @@ def main():
             time.sleep(.05)
         assert (handoff_config / "handoff-success").exists(), "Destination handoff failed"
         assert not source.exists(), "Source image was not cleaned after parent exit"
-        # A collision must leave both originals unchanged.
-        source2 = temp / ("Other Launcher.exe" if os.name == "nt" else "Other Launcher")
-        shutil.copy2(driver, source2)
-        target = destination / ("OpenBK2Launcher.exe" if os.name == "nt" else "OpenBK2Launcher")
-        target.write_bytes(b"unrelated user executable")
-        failed = subprocess.run([str(source2), "relocate", str(handoff_config), str(destination)], capture_output=True)
-        assert failed.returncode != 0 and source2.exists() and target.read_bytes() == b"unrelated user executable"
+        # Handoff success does not mean the destination process has exited. Keep
+        # its image running explicitly so this timing window is tested every run.
+        name = "OpenBK2Launcher.exe" if os.name == "nt" else "OpenBK2Launcher"
+        relocated = destination / name
+        holder = subprocess.Popen([str(relocated), "hold", str(destination)], stdin=subprocess.PIPE,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            assert holder.stdout.readline().strip() == "ready"
+            # Use a separate collision fixture: never rewrite the executable
+            # from the successful handoff, which Windows may still have mapped.
+            source2 = temp / ("Other Launcher.exe" if os.name == "nt" else "Other Launcher")
+            shutil.copy2(driver, source2)
+            collision = temp / "collision game"
+            collision.mkdir()
+            target = collision / name
+            target.write_bytes(b"unrelated user executable")
+            failed = subprocess.run([str(source2), "relocate", str(temp / "collision-config"), str(collision)],
+                                    capture_output=True, timeout=45)
+            assert failed.returncode != 0 and b"different launcher" in failed.stderr, failed.stderr
+            assert source2.read_bytes() == driver.read_bytes() and target.read_bytes() == b"unrelated user executable"
+            assert holder.poll() is None and relocated.read_bytes() == driver.read_bytes()
+        finally:
+            holder.communicate("\n", timeout=10)
         root.rename(temp / "moved-game")
         run(driver, "missing", config, root, release, key)
         # Exercise the real renderer and controller together, with fixture-only CLI automation.
