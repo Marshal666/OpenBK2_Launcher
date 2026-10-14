@@ -49,10 +49,13 @@ class SafeRoot {
     // Atomic, no-replace directory move within this installation. Callers must
     // release handles pinning the source directory before calling on Windows.
     void rename_directory(std::string_view source, std::string_view destination) const;
+    void remove_empty_directory(std::string_view relative) const;
     void flush_directory() const;
     void write_atomic(std::string_view relative, std::string_view bytes,
                       const std::function<void(std::string_view)> &checkpoint = {}) const;
     std::string read(std::string_view relative, std::size_t maximum) const;
 };
 std::string unique_id();
+// Only reserved temporary launcher trees are eligible; never a game/user folder.
+void discard_launcher_tree(const SafeRoot &root, std::string_view relative);
 } // namespace launcher

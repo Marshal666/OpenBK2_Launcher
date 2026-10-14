@@ -13,8 +13,8 @@ on process exit. A PID file does not grant ownership.
    removals. Use a complete, smaller patch route only when prior base bytes and
    the simulated final inventory match. Repair/reinstall use snapshots.
 4. Preflight ZIP, staging, apply-copy and backup space plus a 16 MiB margin.
-   Preserved backups default to an 8 GiB quota. Exceeding it stops before any
-   live change; the launcher never discards a user's backup to make room.
+   Temporary recovery storage is mandatory. Retained backups are disabled by
+   default; when enabled, their 8 GiB quota stops changes before live mutation.
 5. Download and validate archives, extract into per-package staging, copy only
    final target bytes into transaction staging, and discard intermediate files.
    A missing/invalid patch route falls back to the newest snapshot before commit.
@@ -31,17 +31,18 @@ on process exit. A PID file does not grant ownership.
 9. Verify every desired file, apply signed executable modes, flush the installed
    envelope, state and readable summary, and record a transaction receipt.
    Remove the journal last. Only then may Play become ready.
-10. Remove normal old copies and known scratch files. Modified/untracked copies
-    remain under `.launcher/backups/<transaction-id>/` and are reported to the
-    caller. Cleanup failure produces a warning without invalidating committed
-    state. Empty scratch directories and small audit receipts can remain.
+10. Remove temporary copies under `.launcher/recovery/<transaction-id>/` and
+    scratch files after the durable commit. With `OBK_RETAIN_USER_BACKUPS=ON`,
+    the existing retention code instead keeps modified/untracked originals under
+    `.launcher/backups/<transaction-id>/`. Cleanup failure produces a warning
+    without invalidating committed state; later recovery retries temporary cleanup.
 
 On restart, journal paths are validated against the saved signed target and
 previous signed inventories. The journal alone cannot authorize a removal.
 Recovery checks actual current hashes, not an editable progress index. It can
 repeat any file step. If staged target bytes are lost, it records a rollback
-phase and restores original bytes from verified backups. User changes noticed
-after interruption are preserved or cause recovery to stop with an error.
+phase and restores original bytes from verified temporary copies. Unexpected
+live changes cause recovery to stop or are temporarily quarantined during rollback.
 Neither outcome is reported as a complete new installation until verified.
 
 Cancellation is honored during fetch/hash/extract/preparation. Once the journal
@@ -57,16 +58,38 @@ crash tests are not claims of physical power-loss testing.
 When no journal exists, recovery reclaims regular files under the reserved
 `.launcher/staging` subtree, checking every directory and leaf for links first.
 An existing journal blocks this reclamation. Download partials remain resumable.
-Empty directories can remain. Backups from interrupted preparation are retained
-conservatively because they can contain user changes; the 8 GiB quota and
-free-space checks stop further writes if manual archiving is needed. No game
-directory or preserved user backup is recursively deleted.
+Temporary recovery and discarded-mod trees are also reclaimed when no base
+journal exists. Recursive cleanup is restricted to reserved launcher temporary
+trees, rejects links and special files, and never deletes a game root. Legacy
+retained backups are left alone. A v1 transaction journal retains its original
+backup-location semantics so upgrades can still recover an in-flight operation.
+
+## Initial data
+
+Initial defaults are supplied by the signed v3 `initial_data` inventory.
+Seeding only adds missing files in uninitialized folders and commits their
+markers alongside the ordinary installed state. Subsequent updates, Repair and
+reinstall neither verify nor reconcile those folders. Migration out of managed
+files preserves the existing bytes. Startup and Play use authenticated metadata
+and basic executable checks without hashing game assets.
+
+Reset downloads and verifies the installed release's initial packages before
+writing `.launcher/initial-reset.json`. The journal authorizes only the exact
+signed folders. Originals are atomically moved into `.launcher/resets/<id>/original`,
+then staged defaults are renamed into place without replacement. Every folder
+must finish before the reset journal is removed. Recovery replays these moves;
+if staged defaults are missing/corrupt, it rolls back all affected folders.
+Temporary originals are deleted only after successful completion or rollback.
+An enabled retained-backup build moves completed reset originals to
+`.launcher/backups/reset-data/`. The UI confirms deletion of current settings,
+saves and all additional files in the reset folders. Initial-data reset needs
+no online update check and no network during recovery.
 
 ## Optional mod folder operations
 
 `ModManager` holds the same installation writer lock and rejects an active game
 process or pending base-game recovery. Download authenticates the catalog,
-requires the installed game release to match, verifies base integrity, and checks
+requires the installed game release to match, checks launch readiness, and checks
 that no mod folder is present. It preflights download/staging space, downloads
 only the selected mod's packages, verifies their full ZIP/file inventories, and
 flushes the staged files with their signed executable modes. It rechecks that
@@ -77,9 +100,12 @@ reclaims abandoned mod staging using the existing reserved-staging policy.
 
 Remove validates the selected direct child of `MODs`, rejects base-owned folders,
 links, hardlinks and unsafe paths, then moves the whole directory atomically to
-`.launcher/backups/removed-mods/<unique-id>/<id>`. There is no per-file removal or
-automatic backup purge. Existing content at a rename destination is never replaced.
-The UI confirms this recoverable move before invoking it. Base-game updates and
+`.launcher/discarded-mods/<unique-id>/<id>`, then cleans that reserved tree. The
+single directory move is the commit point; a crash afterward leaves cleanup for
+the next recovery. With retained backups enabled, the existing code instead
+moves it to `.launcher/backups/removed-mods/<unique-id>/<id>`. Existing content
+at a rename destination is never replaced. The UI confirms permanent deletion
+under the default policy before invoking it. Base-game updates and
 repairs leave optional mods untracked, preserving their edits and extra files.
 
 The folder commit uses Linux `renameat2(RENAME_NOREPLACE)` plus parent-directory

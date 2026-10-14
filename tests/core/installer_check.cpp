@@ -1,3 +1,4 @@
+#include "build_config.hpp"
 #include "launcher/error.hpp"
 #include "launcher/installer.hpp"
 #include "utf8_main.hpp"
@@ -6,6 +7,10 @@
 #include <iostream>
 
 int test_main(int argc, char **argv) {
+    if (argc == 2 && std::string(argv[1]) == "--backup-policy") {
+        std::cout << (launcher::build::retain_user_backups ? "true" : "false") << '\n';
+        return 0;
+    }
     if (argc < 8)
         return 2;
     try {
@@ -64,10 +69,19 @@ int test_main(int argc, char **argv) {
             options.preserved_backup_limit = 0;
         auto fetch = [&](const launcher::PackageRecord &package, std::stop_token, launcher::ProgressSink) {
             if ((mode == "missing-patch" && package.kind == "patch") ||
-                (mode == "missing-language" && package.kind == "language"))
+                (mode == "missing-language" && package.kind == "language") ||
+                (mode == "missing-initial" && package.kind == "initial"))
                 launcher::fail(launcher::ErrorCategory::Network, "Injected fixture package unavailable");
             return release / launcher::utf8_path(package.id + ".zip");
         };
+        if (command == "reset-initial") {
+            std::stop_source source;
+            if (mode == "cancel")
+                source.request_stop();
+            auto result = installer.reset_initial_data(fetch, source.get_token(), {}, fault);
+            std::cout << "{\"steps\":" << count << ",\"preserved\":" << result.preserved.size() << "}\n";
+            return 0;
+        }
         auto result = installer.install(envelope, argv[5], argv[6], fetch, options);
         std::cout << "{\"patch\":" << (result.used_patch_chain ? "true" : "false")
                   << ",\"fallback\":" << (result.used_snapshot_fallback ? "true" : "false")

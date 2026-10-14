@@ -1,4 +1,5 @@
 #include "launcher/mod_manager.hpp"
+#include "build_config.hpp"
 #include "launcher/error.hpp"
 #include "launcher/platform_services.hpp"
 #include <algorithm>
@@ -72,7 +73,7 @@ void ModManager::download(std::string_view envelope, const std::string &id, Pack
         fail(ErrorCategory::Manifest, "Mod is absent from the signed catalog");
     if (!list().empty())
         fail(ErrorCategory::Filesystem, "Remove the installed mod first; the game loads one mod at a time");
-    if (!verify_installation(root_, *local.installed, stop))
+    if (!installation_ready(root_, *local.installed))
         fail(ErrorCategory::PackageIntegrity, "Repair game files before downloading mods");
     const auto &mod = catalog.mods.at(id);
     std::uint64_t required = 16 * 1024 * 1024;
@@ -143,12 +144,18 @@ std::string ModManager::remove(const std::string &id, FaultHook checkpoint) {
             }
         }
     }
-    const auto backup = ".launcher/backups/removed-mods/" + unique_id() + "/" + id;
+    const auto operation = unique_id();
+    const auto backup = std::string(build::retain_user_backups ? ".launcher/backups/removed-mods/"
+                                                               : ".launcher/discarded-mods/") +
+                        operation + "/" + id;
     if (checkpoint)
         checkpoint("before mod removal");
     root_.rename_directory("MODs/" + id, backup);
     if (checkpoint)
         checkpoint("after mod removal");
-    return backup;
+    if (build::retain_user_backups)
+        return backup;
+    discard_launcher_tree(root_, ".launcher/discarded-mods/" + operation);
+    return {};
 }
 } // namespace launcher

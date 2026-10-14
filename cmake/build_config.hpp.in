@@ -1,7 +1,9 @@
 #pragma once
 #include <string_view>
 #include <array>
+#cmakedefine01 OBK_RETAIN_USER_BACKUPS
 namespace launcher::build {
+inline constexpr bool retain_user_backups = OBK_RETAIN_USER_BACKUPS != 0;
 inline constexpr std::string_view version="@PROJECT_VERSION@";
 inline constexpr std::string_view user_agent="OpenBK2Launcher/@PROJECT_VERSION@";
 inline constexpr std::array<unsigned long, 3> version_parts{@PROJECT_VERSION_MAJOR@, @PROJECT_VERSION_MINOR@, @PROJECT_VERSION_PATCH@};

@@ -15,6 +15,7 @@ from signing import sign_payload, stable_json, strict_json
 
 def main():
     executable = str(Path(sys.argv[1]).resolve(strict=True))
+    keep_backups = json.loads(subprocess.check_output([executable, "--backup-policy"], text=True))
     checks = 0
     with temporary_workspace() as root:
         key = build_fixtures(root / "fixtures")
@@ -27,7 +28,7 @@ def main():
         def run(install, seq=3, *, expected=0, error=None, **kwargs):
             nonlocal checks
             result = subprocess.run(command(install, seq, **kwargs), capture_output=True, text=True, timeout=20, encoding="utf-8")
-            assert result.returncode == expected, (kwargs, result.returncode, result.stdout, result.stderr)
+            assert result.returncode == expected, (str(install), kwargs, result.returncode, result.stdout, result.stderr)
             if error:
                 assert error in result.stderr, result.stderr
             checks += 1
@@ -40,6 +41,7 @@ def main():
         orphan.parent.mkdir(parents=True)
         orphan.write_bytes(b"disposable staging")
         retained = seed / ".launcher/backups/preserved-user-file"
+        retained.parent.mkdir(parents=True, exist_ok=True)
         retained.write_bytes(b"never reclaim a backup speculatively")
         run(seed, action="recover")
         assert not orphan.exists() and retained.exists()
@@ -101,23 +103,23 @@ def main():
         (repair/"Data/base.pak").write_bytes(b"modified data must survive in backup")
         (repair/"MODs/official.pak").write_bytes(b"modified official baseline")
         result = run(repair, 1, mode="repair")
-        assert result["preserved"] == 2
+        assert result["preserved"] == (2 if keep_backups else 0)
         preserved = [p.read_bytes() for p in (repair/".launcher/backups").rglob("*.pak")]
-        assert b"modified data must survive in backup" in preserved and b"modified official baseline" in preserved
+        assert (b"modified data must survive in backup" in preserved and b"modified official baseline" in preserved) == keep_backups
         run(repair, action="verify")
         protected(repair)
         run(repair, 1, mode="reinstall")
         protected(repair)
         quota = clone("backup-quota")
         (quota/"Data/revised.pak").write_bytes(b"do not destroy me")
-        run(quota, mode="backup-quota", expected=1, error="retention limit")
-        assert (quota/"Data/revised.pak").read_bytes() == b"do not destroy me"
+        run(quota, mode="backup-quota", expected=1 if keep_backups else 0, error="retention limit" if keep_backups else None)
+        assert ((quota/"Data/revised.pak").read_bytes() == b"do not destroy me") == keep_backups
 
         adopt = root / "adopt"
         shutil.copytree(root/"fixtures/input-windows", adopt)
         (adopt/"Data/revised.pak").write_bytes(b"untracked conflict")
-        assert run(adopt)["preserved"] >= 1
-        assert any(p.read_bytes() == b"untracked conflict" for p in (adopt/".launcher/backups").rglob("*.pak"))
+        assert (run(adopt)["preserved"] >= 1) == keep_backups
+        assert any(p.read_bytes() == b"untracked conflict" for p in (adopt/".launcher/backups").rglob("*.pak")) == keep_backups
         assert (adopt/"MODs/user.pak").read_bytes() == b"must not be packaged"
         run(adopt, action="verify")
 
@@ -140,7 +142,7 @@ def main():
         run(lost_metadata)
         assert (lost_metadata / "Data/removed.pak").exists(), "Missing metadata authorized deletion"
         assert any(p.read_bytes() == b"user edit without launcher metadata"
-                   for p in (lost_metadata / ".launcher/backups").rglob("*.pak"))
+                   for p in (lost_metadata / ".launcher/backups").rglob("*.pak")) == keep_backups
         protected(lost_metadata)
         run(lost_metadata, action="verify")
         run(chain, 1, expected=1, error="downgrade")
@@ -216,6 +218,21 @@ def main():
             protected(case)
             assert not journal.exists()
         assert pending_case is not None
+        # A launcher upgrade must still understand v1 journals and their old
+        # backup location, even when retained backups are now disabled.
+        legacy = root / "legacy-journal"
+        shutil.copytree(pending_case, legacy)
+        legacy_journal = legacy / ".launcher/transaction.json"
+        legacy_data = strict_json(legacy_journal.read_bytes())
+        legacy_data["transaction_schema_version"] = 1
+        legacy_data.pop("retain_backups")
+        temporary = legacy / ".launcher/recovery" / legacy_data["transaction_id"]
+        if temporary.exists():
+            temporary.rename(legacy / ".launcher/backups" / legacy_data["transaction_id"])
+        legacy_journal.write_bytes(stable_json(legacy_data))
+        run(legacy, action="recover")
+        assert run(legacy, action="verify")["sequence"] == 3
+        protected(legacy)
         forged_journal = root / "forged-journal"
         shutil.copytree(pending_case, forged_journal)
         journal_path = forged_journal/".launcher/transaction.json"

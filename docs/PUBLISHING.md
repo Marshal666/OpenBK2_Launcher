@@ -176,8 +176,8 @@ needed for building, signing, verification, or the publication dry run.
 
 ### Step 5 Prepare the unpacked game files
 
-Copy your actual built game files into the input folders. Together, `shared`
-plus each platform folder must make a complete installation for that platform.
+Copy your actual built game files into the input folders. Together, `shared`,
+`initial` and each platform folder must make a complete installation for that platform.
 Here is a minimal layout; `base.pak` and the library names are examples:
 
 ```text
@@ -187,6 +187,11 @@ OpenBK2-Publishing/
       Data/
         base.pak
       splash.bmp
+    initial/
+      Editor/
+        default.cfg
+      Profiles/
+        default.cfg
     windows/
       bin/
         Game.exe
@@ -207,7 +212,10 @@ OpenBK2-Publishing/
 2. Extract the Windows `bin.zip` so the executable is
    `input/windows/bin/Game.exe`. Extract the Linux one so its executable is
    `input/linux/bin/Game`.
-3. Put common extras in their game-relative locations under `shared/`.
+3. Put immutable common extras in their game-relative locations under `shared/`.
+   Put game-modified defaults, including `Editor/` and `Profiles/`, under
+   `input/initial/` instead. Keep their game-relative folder names. Supply only
+   clean defaults, never your personal saves/settings. See [initial data](PUBLISHING_INPUTS.md#initial-data).
 4. Put language files directly in `input/languages/` as `texts-en.pak`,
    `texts-de.pak`, etc. Supply at least one. They are installed under `Data/`.
 5. Check that no path in `shared/` also exists in a platform folder. Shared
@@ -218,13 +226,18 @@ is the folder containing `bin/`, not `bin/` itself. The current toolkit requires
 the executable names above and uses `bin/` as the working directory.
 
 `Profiles/` and `MODs/` are excluded from base inputs unless you opt in exact
-official files. Before including `profiles.zip` or downloadable mods, follow
+immutable official files. The initial-data input includes `Profiles/` without
+that opt-in. Before including `profiles.zip` or downloadable mods, follow
 the [profile and mod instructions](PUBLISHING_INPUTS.md#profiles-mods-and-language-files).
 Linux helper executables need their execute bits preserved; package on Linux
 if your Windows extraction process cannot preserve them.
 
 **You should now have:** complete unpacked inputs, with real game executables
 and at least one language pack. A data-only folder is not a full release.
+
+Initial data requires launcher **0.3.0 or newer**. When upgrading an existing
+deployment, rebuild/distribute the production launcher with its existing URL/key
+before publishing a manifest that uses `--shared-init-data`.
 
 ### Step 6 Build sign and publish the first release
 
@@ -249,6 +262,7 @@ backticks continue the command onto the next line; do not add spaces after them.
 python tools/release.py build `
     --version "$Version" --sequence $Sequence `
     --shared-root "$PublishingRoot/input/shared" `
+    --shared-init-data "$PublishingRoot/input/initial" `
     --windows-root "$PublishingRoot/input/windows" `
     --linux-root "$PublishingRoot/input/linux" `
     --languages-dir "$PublishingRoot/input/languages" `
@@ -443,7 +457,8 @@ new shell. Keep your previous release output intact.
 2. Leave all unchanged files in those input folders.
 3. Remove a file from the base inputs only when it should leave the official
    game installation. Updates can remove previously managed files; unrelated
-   player files are preserved and modified originals are backed up.
+   player files are preserved. Edits to replaced managed files are lost with
+   the default backup policy. Initial-data folders remain untouched.
 4. Keep all supported languages and any desired mod catalog entries supplied.
 
 For example, to update `Data/base.pak`, replace
@@ -466,6 +481,7 @@ $CreatedUtc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 python tools/release.py build `
     --version "$Version" --sequence $Sequence `
     --shared-root "$PublishingRoot/input/shared" `
+    --shared-init-data "$PublishingRoot/input/initial" `
     --windows-root "$PublishingRoot/input/windows" `
     --linux-root "$PublishingRoot/input/linux" `
     --languages-dir "$PublishingRoot/input/languages" `
@@ -474,7 +490,11 @@ python tools/release.py build `
     --out "$ReleaseDir"
 ```
 
-Use the same optional profile/mod/exclusion settings as the first release.
+Use the same optional initial-data/profile/mod/exclusion settings as the first release.
+Keep supplying the initial-data folder, even when its defaults have not changed.
+Changed defaults apply to fresh installations and explicit Reset operations;
+they do not overwrite existing players' settings during updates. Omit the option
+entirely if the game has no initial data; an explicitly supplied input must contain files.
 `--previous-release` points to the **retained local output folder**, including
 its ZIPs and metadata. It is not a URL or the player's installation.
 
@@ -559,5 +579,5 @@ supplied trusted key before replacing it.
 
 For package limits, optional mods and exact file ownership rules, use the
 [input reference](PUBLISHING_INPUTS.md). For format and recovery details, see
-[manifest v2](MANIFEST_V2.md), the [update protocol](UPDATE_PROTOCOL.md), and the
+[manifest v3](MANIFEST_V3.md), the [update protocol](UPDATE_PROTOCOL.md), and the
 [security model](../SECURITY.md).

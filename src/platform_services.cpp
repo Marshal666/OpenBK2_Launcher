@@ -360,7 +360,7 @@ void GameLauncher::launch(const SafeRoot &root, const InstalledState &state) {
         fail(ErrorCategory::UnsupportedPlatform, "Installed game is for a different platform");
     auto lock = root.open(".launcher/update.lock", FileMode::Append);
     lock.lock_exclusive();
-    if (!verify_installation(root, state))
+    if (!installation_ready(root, state))
         fail(ErrorCategory::PackageIntegrity, "Installation needs repair or recovery before Play");
     const auto &profile = state.manifest.platforms.at(state.platform).launch;
     const auto executable = root.path() / utf8_path(profile.executable);

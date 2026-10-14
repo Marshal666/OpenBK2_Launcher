@@ -1,10 +1,11 @@
 # OpenBK2 Launcher
 
 Independent MIT-licensed C++20/CMake launcher and Python release toolkit. Installs,
-updates, repairs and launches signed game releases; preserves user files; supports
+updates, repairs and launches signed game releases; preserves unrelated user files; supports
 offline Play, managed language switching and interrupted-update recovery. Shared
 game data is packaged once for both platforms. An experimental Mods panel downloads
-signed optional mods and removes them into recoverable backups. The GUI
+signed optional mods and removes them after confirmation. Initial data such as
+`Editor/` and `Profiles/` is installed once and then left to the game. The GUI
 uses SDL3 and Dear ImGui. No game code or playable game data is included.
 
 Native Windows and Ubuntu 22.04 builds and fixture suites have been exercised.
@@ -13,6 +14,9 @@ and [shared-data/mod results](docs/SHARED_DATA_AND_MODS.md), with
 [platform limitations](docs/PLATFORMS.md). The delivered executables are
 **fixture/development builds**. Production requires your HTTPS manifest endpoint
 and public verification key; no production trust values or private keys are bundled.
+
+Launcher 0.3 adds initial data and fast startup; see its
+[behavior and validation report](docs/INITIAL_DATA_AND_STARTUP.md).
 
 **Publishing** Follow the [step-by-step publishing guide](docs/PUBLISHING.md)
 to create the GitHub repository and signing key, connect a production launcher,
@@ -136,13 +140,31 @@ for the values to supply, optional paths and terminal setup.
 
 ## Operation and maintenance
 
-Play verifies local managed bytes without requiring an online update check.
+Startup and Play validate installed signed metadata and the launch file's basic
+properties without scanning or hashing game assets. A background update check
+runs on every launch, with a 5-second connection / 10-second transfer limit and
+no retries. Failure is logged and does not block Play. The status is **Ready for
+playing**; multiplayer compatibility is the game's responsibility.
 Updates are explicit; active games block changes. Settings distinguishes selecting
 another existing installation from moving game files. Language changes remain
 pending until verified commit succeeds. Repair and reinstall preserve unknown
-files and back up modifications to managed files. A missing configured root asks
-for reselection. Do not remove `.launcher/transaction.json` or its staging/backups
+files and leave initialized user folders untouched. Full managed-file integrity
+checks run during installation, update, Repair and recovery. A missing configured root asks
+for reselection. Do not remove active journals or their temporary recovery data
 during recovery; see the [recovery protocol](docs/UPDATE_PROTOCOL.md).
+
+Publish defaults with `--shared-init-data <folder>` containing game-relative
+`Editor/` and `Profiles/` folders. Existing files are preserved during initial
+installation/adoption; updates never restore deleted defaults. **Settings > Reset
+initial data** replaces the entire declared folders after a destructive-action
+confirmation. See [initial-data publishing](docs/PUBLISHING_INPUTS.md#initial-data).
+
+Retained backups are disabled by default. Temporary recovery copies are still
+required during operations and cleaned up afterward. Reset and mod removal
+permanently discard the affected personal data; only published defaults can be
+downloaded again. The backup implementation remains available to developers via
+`-DOBK_RETAIN_USER_BACKUPS=ON`. Existing backups made by older builds are left
+alone and can be removed manually after inspection.
 
 The default game folder is `~/Games/OpenBK2`: usually
 `C:/Users/<user>/Games/OpenBK2` on Windows and `/home/<user>/Games/OpenBK2` on Linux.

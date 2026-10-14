@@ -1,3 +1,4 @@
+#include "build_config.hpp"
 #include "launcher/controller.hpp"
 #include "launcher/error.hpp"
 #include "utf8_main.hpp"
@@ -23,6 +24,10 @@ int test_main(int argc, char **argv) {
         if (argc < 3)
             return 2;
         const std::string mode = argv[1];
+        if (mode == "backup-policy") {
+            std::cout << (build::retain_user_backups ? "true" : "false") << '\n';
+            return 0;
+        }
         if (mode == "path-text") {
             std::cout << path_utf8(utf8_path(argv[2])) << '\n';
             return 0;
@@ -94,11 +99,25 @@ int test_main(int argc, char **argv) {
         if (argc == 7)
             options.fixture_package_base = argv[6];
         options.auto_install = true;
-        if (mode == "offline")
+        if (mode == "offline" || mode == "quick-play")
             options.fixture_release.clear();
         Controller controller(options);
         controller.initialize();
         idle(controller);
+        if (mode == "quick-play") {
+            check(controller.snapshot().ready, "startup scanned game data");
+            check(controller.snapshot().status == "Ready for playing", "wrong ready status");
+            controller.check_updates(true);
+            idle(controller);
+            check(controller.snapshot().ready && controller.snapshot().error.empty(),
+                  "automatic update failure interrupted Play");
+            controller.play();
+            idle(controller);
+            check(controller.game_running(), "Play scanned game data");
+            while (controller.game_running())
+                std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            return 0;
+        }
         if (mode == "missing") {
             check(controller.snapshot().root_missing, "missing root not reported");
             return 0;

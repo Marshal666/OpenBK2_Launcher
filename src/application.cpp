@@ -1,5 +1,6 @@
 #include "launcher/application.hpp"
 #include "../assets/launcher_icon.hpp"
+#include "build_config.hpp"
 #include "font.hpp"
 #include "hero.hpp"
 #include "launcher/window_layout.hpp"
@@ -300,8 +301,11 @@ bool settings_page(SDL_Window *window, Controller &controller, const UiSnapshot 
         if (action(t("Full reinstall"), bool(state.latest) && !game, "Verified release required"))
             ImGui::OpenPopup("Confirm reinstall");
         if (ImGui::BeginPopupModal("Confirm reinstall", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextUnformatted("Restore all managed files. Modified files are backed up; "
-                                   "user files are preserved.");
+            ImGui::TextUnformatted(
+                build::retain_user_backups
+                    ? "Restore all managed files. Modified files are backed up; user files are preserved."
+                    : "Restore all managed files. Changes to managed files will be lost.\nInitial data and "
+                      "additional user files are left untouched.");
             if (ImGui::Button("Continue")) {
                 controller.install(InstallMode::Reinstall);
                 stay = false;
@@ -315,6 +319,32 @@ bool settings_page(SDL_Window *window, Controller &controller, const UiSnapshot 
         ImGui::SameLine();
         if (ImGui::Button(t("Create desktop shortcut")))
             controller.shortcut();
+        if (state.installed && !state.installed->manifest.initial_data.folders.empty()) {
+            ImGui::SameLine();
+            if (action("Reset initial data", !game, "Close the game first"))
+                ImGui::OpenPopup("Reset initial data?");
+            if (ImGui::BeginPopupModal("Reset initial data?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::TextUnformatted("Restore the installed release's defaults in these folders:");
+                for (const auto &name : state.installed->manifest.initial_data.folders)
+                    ImGui::BulletText("%s", name.c_str());
+                ImGui::TextColored({1, .65f, .5f, 1},
+                                   "Current settings, saves, and all added files in these\nfolders will be "
+                                   "deleted from the game installation.");
+                ImGui::TextUnformatted(
+                    build::retain_user_backups
+                        ? "A backup of the current folders will be retained."
+                        : "This cannot be undone.\nPersonal data cannot be downloaded again.");
+                if (action("Reset and replace", !state.busy && !game, "Close the game first")) {
+                    controller.reset_initial_data();
+                    stay = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(t("Cancel")))
+                    ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
+        }
     }
     if (action(t("Check for updates"), !state.checking, "Already checking"))
         controller.check_updates();
@@ -419,7 +449,7 @@ int run_application(const ApplicationOptions &options) {
         if (state.exit_requested)
             break;
         if (controller && state.initialized && !check_started) {
-            controller->check_updates();
+            controller->check_updates(true);
             check_started = true;
         }
         if (pending_install && !state.busy) {
@@ -630,8 +660,12 @@ int run_application(const ApplicationOptions &options) {
                     ImGui::OpenPopup("Remove mod?");
                 if (ImGui::BeginPopupModal("Remove mod?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
                     ImGui::Text("Remove %s?", remove_mod.c_str());
-                    ImGui::TextUnformatted("The whole folder, including your edits, will be moved\nto "
-                                           ".launcher/backups/removed-mods. Nothing is deleted.");
+                    ImGui::TextUnformatted(
+                        build::retain_user_backups
+                            ? "The whole folder, including your edits, will be moved\nto "
+                              ".launcher/backups/removed-mods. Nothing is deleted."
+                            : "The whole folder, including your edits and added files,\nwill be permanently "
+                              "deleted. Only published defaults\ncan be downloaded again.");
                     if (ImGui::Button(t("Remove"))) {
                         controller->remove_mod(remove_mod);
                         remove_mod.clear();

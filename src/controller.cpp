@@ -72,6 +72,8 @@ void Controller::work(std::function<void(std::stop_token)> action) {
     });
 }
 void Controller::refresh_local(std::stop_token stop) {
+    if (stop.stop_requested())
+        fail(ErrorCategory::Cancelled, "Local refresh cancelled");
     const auto settings = snapshot().settings;
     (void)checked_installation_directory(settings.root);
     if (!std::filesystem::exists(settings.root)) {
@@ -94,7 +96,7 @@ void Controller::refresh_local(std::stop_token stop) {
     for (const auto &warning : recovery.warnings)
         append_log(config_, warning);
     auto local = load_local(installer.root(), keys_, policy_);
-    const bool ready = local.installed && verify_installation(installer.root(), *local.installed, stop);
+    const bool ready = local.installed && installation_ready(installer.root(), *local.installed);
     auto mods = ModManager(settings.root, keys_, policy_).list();
     std::scoped_lock lock(mutex_);
     state_.mods = std::move(mods);
@@ -103,7 +105,7 @@ void Controller::refresh_local(std::stop_token stop) {
     state_.ready = ready;
     state_.root_missing = false;
     state_.initialized = true;
-    state_.status = ready ? "Ready to play offline"
+    state_.status = ready ? "Ready for playing"
                           : (state_.installed ? "Managed files need repair"
                                               : "Existing files will be preserved during adoption.");
     state_.progress = {ready ? "Ready" : "Checking", 0, 0, 0};
@@ -111,7 +113,7 @@ void Controller::refresh_local(std::stop_token stop) {
 void Controller::initialize() {
     work([this](std::stop_token stop) { refresh_local(stop); });
 }
-void Controller::check_updates() {
+void Controller::check_updates(bool automatic) {
     {
         std::scoped_lock lock(mutex_);
         if (state_.checking)
@@ -119,7 +121,7 @@ void Controller::check_updates() {
         state_.checking = true;
     }
     const auto selected = snapshot().settings.root;
-    checker_ = std::jthread([this, selected](std::stop_token stop) {
+    checker_ = std::jthread([this, selected, automatic](std::stop_token stop) {
         try {
             std::string envelope;
 #if OBK_FIXTURE_BUILD
@@ -131,7 +133,12 @@ void Controller::check_updates() {
             SafeRoot source(utf8_path(options_.fixture_release));
             envelope = source.read("manifest.envelope.json", 16 * 1024 * 1024);
 #else
-            HttpDownloader downloader;
+            DownloadOptions options;
+            options.connect_timeout = 5;
+            options.transfer_timeout = 10;
+            options.low_speed_time = 5;
+            options.retries = 0;
+            HttpDownloader downloader(options);
             GitHubReleaseProvider provider(std::string(build::manifest_url), downloader);
             envelope = provider.fetch_latest_envelope(stop);
 #endif
@@ -164,7 +171,11 @@ void Controller::check_updates() {
                     state_.settings.requested_language = language;
             }
         } catch (const std::exception &error) {
-            problem(std::string("Update check: ") + error.what());
+            const auto message = std::string("Update check: ") + error.what();
+            if (automatic)
+                append_log(config_, message);
+            else
+                problem(message);
         }
         std::scoped_lock lock(mutex_);
         state_.checking = false;
@@ -281,10 +292,11 @@ void Controller::remove_mod(std::string id) {
         if (game_.running())
             fail(ErrorCategory::GameRunning, "Close the game before removing a mod");
         const auto backup = ModManager(current.settings.root, keys_, policy_).remove(id);
-        append_log(config_, "Removed mod preserved at: " + backup);
+        if (!backup.empty())
+            append_log(config_, "Removed mod preserved at: " + backup);
         refresh_local({});
         std::scoped_lock lock(mutex_);
-        state_.status = "Mod removed. Backup: " + backup;
+        state_.status = backup.empty() ? "Mod removed" : "Mod removed. Backup: " + backup;
     });
 }
 void Controller::play() {
@@ -308,5 +320,29 @@ void Controller::shortcut() {
 void Controller::cancel() {
     worker_.request_stop();
     checker_.request_stop();
+}
+void Controller::reset_initial_data() {
+    work([this](std::stop_token stop) {
+        const auto current = snapshot();
+        if (!current.installed || game_.running())
+            fail(ErrorCategory::GameRunning, "Install the game and close it before resetting initial data");
+        auto progress = [this](const Progress &p) {
+            std::scoped_lock lock(mutex_);
+            state_.progress = p;
+            state_.ready = false;
+        };
+        auto fetch = [&](const PackageRecord &p, std::stop_token token, ProgressSink report) {
+            return fetch_package(p, current.settings.root, token, report);
+        };
+        auto result =
+            Installer(current.settings.root, keys_, policy_).reset_initial_data(fetch, stop, progress);
+        for (const auto &warning : result.warnings)
+            append_log(config_, warning);
+        for (const auto &path : result.preserved)
+            append_log(config_, "Reset backup: " + path);
+        refresh_local({});
+        std::scoped_lock lock(mutex_);
+        state_.status = "Initial data reset. Ready for playing";
+    });
 }
 } // namespace launcher

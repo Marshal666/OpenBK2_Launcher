@@ -1,18 +1,25 @@
 #include "launcher/installer.hpp"
+#include "build_config.hpp"
 #include "launcher/error.hpp"
+#include "launcher/initial_data.hpp"
 #include "launcher/sha256.hpp"
 
 namespace launcher {
 TransactionResult Installer::recover(FaultHook checkpoint, ProgressSink progress) {
     auto lock = root_.open(".launcher/update.lock", FileMode::Append);
     lock.lock_exclusive();
-    return Transaction(root_, keys_, policy_, std::move(checkpoint), std::move(progress)).recover();
+    auto initial = recover_initial_data(root_, keys_, policy_, checkpoint);
+    auto result = Transaction(root_, keys_, policy_, std::move(checkpoint), std::move(progress)).recover();
+    result.warnings.insert(result.warnings.end(), initial.warnings.begin(), initial.warnings.end());
+    result.rolled_back |= initial.rolled_back;
+    return result;
 }
 InstallResult Installer::install(std::string_view envelope, const std::string &platform,
                                  const std::string &language, PackageFetcher fetch, InstallOptions options,
                                  std::stop_token stop, ProgressSink progress) {
     auto lock = root_.open(".launcher/update.lock", FileMode::Append);
     lock.lock_exclusive();
+    recover_initial_data(root_, keys_, policy_, options.checkpoint);
     Transaction transaction(root_, keys_, policy_, options.checkpoint, progress);
     auto recovered = transaction.recover();
     if (progress)
@@ -26,7 +33,7 @@ InstallResult Installer::install(std::string_view envelope, const std::string &p
              "Insufficient working space; need " + std::to_string(plan.working_bytes) + " bytes");
     std::uint64_t retained = 0;
     const auto backups = root_.path() / ".launcher/backups";
-    if (std::filesystem::exists(backups)) {
+    if (build::retain_user_backups && std::filesystem::exists(backups)) {
         for (const auto &entry : std::filesystem::recursive_directory_iterator(backups)) {
             if (entry.is_symlink())
                 fail(ErrorCategory::Filesystem, "Linked backup entry requires manual inspection");
@@ -45,19 +52,20 @@ InstallResult Installer::install(std::string_view envelope, const std::string &p
         (void)f;
         affected.push_back(path);
     }
-    for (const auto &path : affected)
-        if (root_.exists(path)) {
-            auto file = root_.open(path, FileMode::Read);
-            const bool preserve = !local.installed || !local.installed->files.contains(path) ||
-                                  sha256_file(file, stop) != local.installed->files.at(path).sha256;
-            if (preserve) {
-                if (file.size() >
-                    options.preserved_backup_limit - std::min(retained, options.preserved_backup_limit))
-                    fail(ErrorCategory::DiskSpace,
-                         "User-file backups would exceed the retention limit; no files changed");
-                retained += file.size();
+    if (build::retain_user_backups)
+        for (const auto &path : affected)
+            if (root_.exists(path)) {
+                auto file = root_.open(path, FileMode::Read);
+                const bool preserve = !local.installed || !local.installed->files.contains(path) ||
+                                      sha256_file(file, stop) != local.installed->files.at(path).sha256;
+                if (preserve) {
+                    if (file.size() >
+                        options.preserved_backup_limit - std::min(retained, options.preserved_backup_limit))
+                        fail(ErrorCategory::DiskSpace,
+                             "User-file backups would exceed the retention limit; no files changed");
+                    retained += file.size();
+                }
             }
-        }
     InstallResult result;
     result.preserved = std::move(recovered.preserved);
     result.warnings = std::move(recovered.warnings);

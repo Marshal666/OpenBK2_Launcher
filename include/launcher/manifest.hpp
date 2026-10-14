@@ -46,6 +46,11 @@ struct ModRecord {
     Inventory files;
     std::vector<std::string> packages;
 };
+struct InitialDataRecord {
+    std::set<std::string> folders;
+    Inventory files;
+    std::vector<std::string> packages;
+};
 struct Manifest {
     std::string version, created_utc, payload, payload_hash, envelope;
     std::uint64_t sequence = 0;
@@ -53,6 +58,7 @@ struct Manifest {
     std::map<std::string, PlatformRecord> platforms;
     std::map<std::string, LanguageRecord> languages;
     std::map<std::string, ModRecord> mods;
+    InitialDataRecord initial_data;
 };
 using TrustedKeys = std::map<std::string, std::array<std::uint8_t, 32>>;
 struct ManifestPolicy {
@@ -63,6 +69,7 @@ std::array<std::uint8_t, 32> public_key_from_hex(std::string_view text);
 void validate_relative_path(std::string_view path);
 std::string path_key(std::string_view path);
 void validate_game_path(std::string_view path, const std::set<std::string> &allowlist);
+bool initial_data_path(const Manifest &manifest, std::string_view path);
 bool safe_url(std::string_view url, ManifestPolicy policy = {});
 Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, ManifestPolicy policy = {});
 void enforce_sequence(const Manifest &target, std::uint64_t highest, std::string_view accepted_hash);

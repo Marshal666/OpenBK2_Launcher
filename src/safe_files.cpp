@@ -422,6 +422,78 @@ void SafeRoot::write_atomic(std::string_view relative, std::string_view bytes,
     if (checkpoint)
         checkpoint("atomic file renamed");
 }
+void SafeRoot::remove_empty_directory(std::string_view relative) const {
+    validate_relative_path(relative);
+    const auto target = impl_->root / utf8_path(relative);
+    auto parents = pin_directories(target.parent_path(), false);
+#ifdef _WIN32
+    Owner directory(CreateFileW(target.c_str(), DELETE | FILE_READ_ATTRIBUTES,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+    if (directory.handle == invalid)
+        io_error("Open empty directory for removal");
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!GetFileInformationByHandle(directory.handle, &info))
+        io_error("Inspect empty directory");
+    if (!(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
+        (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT))
+        fail(ErrorCategory::Filesystem, "Linked or non-directory cleanup target");
+    FILE_DISPOSITION_INFO disposition{TRUE};
+    if (!SetFileInformationByHandle(directory.handle, FileDispositionInfo, &disposition, sizeof(disposition)))
+        io_error("Remove empty directory");
+#else
+    Owner directory(openat(parents.back()->handle, target.filename().c_str(),
+                           O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+    if (directory.handle == invalid)
+        io_error("Open empty directory for removal");
+    if (unlinkat(parents.back()->handle, target.filename().c_str(), AT_REMOVEDIR))
+        io_error("Remove empty directory");
+    if (fsync(parents.back()->handle))
+        io_error("Flush removed directory");
+#endif
+}
+namespace {
+void discard_contents(const SafeRoot &root, unsigned depth, std::size_t &visited) {
+    if (depth > 64)
+        fail(ErrorCategory::Filesystem, "Temporary tree exceeds cleanup depth limit");
+    for (const auto &entry : std::filesystem::directory_iterator(root.path())) {
+        if (++visited > 200000)
+            fail(ErrorCategory::Filesystem, "Temporary tree exceeds cleanup entry limit");
+        const auto bytes = entry.path().filename().u8string();
+        const std::string name(bytes.begin(), bytes.end());
+        if (entry.is_directory()) {
+            {
+                SafeRoot child(entry.path());
+                discard_contents(child, depth + 1, visited);
+            }
+            root.remove_empty_directory(name);
+        } else
+            root.remove(name);
+    }
+}
+} // namespace
+void discard_launcher_tree(const SafeRoot &root, std::string_view relative) {
+    validate_relative_path(relative);
+    const auto slash = relative.find('/', 10);
+    const auto area = relative.substr(0, slash);
+    if (area != ".launcher/recovery" && area != ".launcher/staging" && area != ".launcher/resets" &&
+        area != ".launcher/discarded-mods")
+        fail(ErrorCategory::Filesystem, "Cleanup is restricted to launcher temporary trees");
+    const auto path = root.path() / utf8_path(relative);
+    std::error_code error;
+    const auto status = std::filesystem::symlink_status(path, error);
+    if (error == std::errc::no_such_file_or_directory ||
+        status.type() == std::filesystem::file_type::not_found)
+        return;
+    if (error)
+        fail(ErrorCategory::Filesystem, "Cannot inspect temporary tree");
+    std::size_t visited = 0;
+    {
+        SafeRoot tree(path);
+        discard_contents(tree, 0, visited);
+    }
+    root.remove_empty_directory(relative);
+}
 std::string SafeRoot::read(std::string_view relative, std::size_t maximum) const {
     auto file = open(relative, FileMode::Read);
     if (file.size() > maximum)

@@ -61,7 +61,7 @@ def main():
                 wait_for(lambda: run(["xdotool", "getdisplaygeometry"]).returncode == 0, "Xvfb unavailable", process=xvfb)
                 start(["openbox", "--sm-disable"])
                 time.sleep(.5)
-            private, _ = build_shared_fixtures(temp / "fixtures", game=game, count=1)
+            private, _ = build_shared_fixtures(temp / "fixtures", game=game, count=1, initial_data=True)
             public = private.public_key().public_bytes_raw().hex()
             common = [binary, "--fixture-release", temp / "fixtures/release-1", "--fixture-public-key", public]
             result = run(common + ["--auto-install", "--config-dir", temp / "config", "--root", temp / "game",
@@ -140,11 +140,38 @@ def main():
                 time.sleep(.5)
                 click(285, 172)  # Installed Alpha / Remove.
                 time.sleep(.3)
-                click(310, 343)  # Confirm recoverable removal.
+                click(355, 362)  # Confirm permanent removal in the centered warning dialog.
                 wait_for(lambda: not active.exists(), "Mod Remove control did not remove Alpha")
                 backups = list((temp / "game/.launcher/backups/removed-mods").glob("*/Alpha/user.cfg"))
-                assert len(backups) == 1 and backups[0].read_bytes() == b"preserved player edits"
-                report["mod_download_remove_preserves_edits"] = "pass"
+                if backups:
+                    assert len(backups) == 1 and backups[0].read_bytes() == b"preserved player edits"
+                wait_for(lambda: not list((temp / "game/.launcher/discarded-mods").glob("*/Alpha/user.cfg")), "Removed mod cleanup did not finish")
+                report["mod_download_and_confirmed_removal"] = "pass"
+                process.terminate()
+                process.wait(timeout=10)
+                # The Settings reset requires confirmation and replaces only its signed folders.
+                defaults = temp / "game/Profiles/default.cfg"
+                personal = temp / "game/Profiles/user.save"
+                defaults.write_bytes(b"edited settings")
+                personal.write_bytes(b"personal save")
+                process = start(common + ["--config-dir", temp / "config", "--root", temp / "game"])
+                hwnd = wait_for(lambda: window("^OpenBK2 Launcher$"), "Launcher unavailable for Settings reset")
+                time.sleep(.8)
+                click(790, 24)  # Settings.
+                click(500, 429)  # Reset initial data, beside Repair/Reinstall/Shortcut.
+                try:
+                    from PIL import ImageGrab
+                    ImageGrab.grab(xdisplay=env["DISPLAY"]).save(artifacts / "x11-reset-confirmation.png")
+                except ImportError:
+                    pass
+                click(470, 390)  # Cancel in the reset confirmation.
+                time.sleep(.2)
+                assert defaults.read_bytes() == b"edited settings" and personal.exists()
+                click(500, 429)
+                click(350, 390)  # Explicitly confirm replacing the initial folders.
+                wait_for(lambda: defaults.exists() and defaults.read_bytes() == b"profile default" and not personal.exists(), "Settings Reset did not restore initial data")
+                assert (temp / "game/Data/common.pak").exists()
+                report["initial_data_reset_cancel_and_confirm"] = "pass"
                 process.terminate()
                 process.wait(timeout=10)
             (artifacts / (args.backend+"-results.json")).write_text(json.dumps(report, indent=2)+"\n")

@@ -41,9 +41,10 @@ class Controller {
     ~Controller();
     UiSnapshot snapshot() const;
     void initialize();
-    void check_updates();
+    void check_updates(bool automatic = false);
     void configure(Settings settings);
     void install(InstallMode mode = InstallMode::Update);
+    void reset_initial_data();
     void download_mod(std::string id);
     void remove_mod(std::string id);
     void play();

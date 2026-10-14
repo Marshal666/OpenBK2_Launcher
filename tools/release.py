@@ -13,7 +13,7 @@ import zipfile
 from schema import PACKAGE_LIMIT, inventory, managed_path, paths_unique, require, safe_path, safe_url, validate_payload
 from signing import keygen, load_private, sign_payload, stable_json, strict_json, verify_envelope
 
-TOOL_VERSION = "0.2.0"
+TOOL_VERSION = "0.3.0"
 
 
 def file_hash(path):
@@ -110,12 +110,12 @@ def make_packages(out, base_url, kind, platform, records, sources, limit=PACKAGE
     return result
 
 
-def build_release(*, out, version, sequence, roots, languages_dir, base_url, previous=None, allowlist=(), exclude=(), shared_root=None, mods_dir=None,
+def build_release(*, out, version, sequence, roots, languages_dir, base_url, previous=None, allowlist=(), exclude=(), shared_root=None, mods_dir=None, shared_init_data=None,
                   created_utc="1970-01-01T00:00:00Z", package_limit=PACKAGE_LIMIT):
     out = Path(out).resolve()
     require(not out.exists() or not any(out.iterdir()), "Output directory must be empty")
     safe_url(base_url.rstrip("/")+"/")
-    for root in [*roots.values(), *([shared_root] if shared_root else []), *([mods_dir] if mods_dir else [])]:
+    for root in [*roots.values(), *([shared_root] if shared_root else []), *([mods_dir] if mods_dir else []), *([shared_init_data] if shared_init_data else [])]:
         require(not out.is_relative_to(Path(root).resolve()), "Output cannot be inside a game source root")
     out.mkdir(parents=True, exist_ok=True)
     old = None
@@ -123,11 +123,30 @@ def build_release(*, out, version, sequence, roots, languages_dir, base_url, pre
         previous = Path(previous).resolve(strict=True)
         old = verify_release(previous, allow_unsigned=True)
         require(sequence > old["release"]["sequence"], "New sequence must increase")
-    schema = 2 if shared_root or mods_dir or (old and old["schema_version"] == 2) else 1
+    schema = max(3 if shared_init_data else 2 if shared_root or mods_dir else 1, old["schema_version"] if old else 1)
     m = {"schema_version": schema, "release": {"version": version, "sequence": sequence, "created_utc": created_utc},
-         "min_launcher_version": "0.2.0" if schema == 2 else "0.1.0", "packages": [], "platforms": {}, "languages": {}}
-    if schema == 2:
+         "min_launcher_version": {1: "0.1.0", 2: "0.2.0", 3: "0.3.0"}[schema], "packages": [], "platforms": {}, "languages": {}}
+    if schema >= 2:
         m["mods"] = {}
+    if schema >= 3:
+        records, sources = [], {}
+        if shared_init_data:
+            initial_root = Path(shared_init_data).resolve(strict=True)
+            for directory, dirs, names in os.walk(initial_root, followlinks=False):
+                for name in dirs:
+                    path = Path(directory, name)
+                    require(not path.is_symlink() and not (getattr(path.lstat(), "st_file_attributes", 0) & 0x400), "Linked initial-data directory rejected")
+                for name in sorted(names):
+                    path = Path(directory, name)
+                    rel = path.relative_to(initial_root).as_posix()
+                    records.append(file_record(path, rel, False))
+                    sources[rel] = path
+            require(records, "Initial-data input must contain files inside game-relative folders")
+        records.sort(key=lambda f: f["path"])
+        paths_unique(f["path"] for f in records)
+        packages = make_packages(out, base_url, "initial", "any", records, sources, package_limit)
+        m["packages"].extend(packages)
+        m["initial_data"] = {"folders": sorted({f["path"].split('/')[0] for f in records}), "files": records, "package_ids": [p["id"] for p in packages]}
     histories = {}
     if old:
         metadata = strict_json((previous / "release-metadata.json").read_bytes())
@@ -305,6 +324,7 @@ def main():
     b.add_argument("--windows-root")
     b.add_argument("--linux-root")
     b.add_argument("--shared-root", help="Common game files, packaged once for both platforms")
+    b.add_argument("--shared-init-data", help="Shared initial files in game-relative folders (e.g. Editor/ and Profiles/); installed once, then user-owned")
     b.add_argument("--mods-dir", help="Optional downloadable mods, one folder per mod")
     b.add_argument("--previous-release")
     b.add_argument("--managed-user-file", action="append", default=[])
@@ -332,7 +352,7 @@ def main():
             timestamp = args.created_utc or datetime.fromtimestamp(int(os.environ.get("SOURCE_DATE_EPOCH", "0")), timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             build_release(out=args.out, version=args.version, sequence=args.sequence, roots=roots,
                           languages_dir=args.languages_dir, base_url=args.base_url, previous=args.previous_release,
-                          allowlist=args.managed_user_file, exclude=args.exclude, shared_root=args.shared_root, mods_dir=args.mods_dir, created_utc=timestamp)
+                          allowlist=args.managed_user_file, exclude=args.exclude, shared_root=args.shared_root, mods_dir=args.mods_dir, shared_init_data=args.shared_init_data, created_utc=timestamp)
             print("Built and verified unsigned release:", args.out)
         elif args.command == "verify":
             verify_release(args.release_dir, {args.key_id: bytes.fromhex(args.public_key)})

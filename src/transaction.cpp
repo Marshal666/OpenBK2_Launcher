@@ -19,12 +19,13 @@ struct Journal {
     std::string id, platform, language, phase = "commit";
     std::uint64_t old_sequence = 0, new_sequence = 0;
     std::vector<Operation> operations;
+    bool retain_backups = build::retain_user_backups;
 };
 std::string staging(const std::string &id) {
     return ".launcher/staging/" + id + "/";
 }
-std::string backup(const std::string &id) {
-    return ".launcher/backups/" + id + "/";
+std::string backup(const Journal &j) {
+    return std::string(j.retain_backups ? ".launcher/backups/" : ".launcher/recovery/") + j.id + "/";
 }
 void step(const FaultHook &hook, std::string_view name) {
     if (hook)
@@ -32,9 +33,11 @@ void step(const FaultHook &hook, std::string_view name) {
 }
 std::string encode(const Journal &j) {
     using json::quote;
-    std::string out = "{\"transaction_schema_version\":1,\"transaction_id\":" + quote(j.id) +
-                      ",\"platform\":" + quote(j.platform) + ",\"language\":" + quote(j.language) +
-                      ",\"phase\":" + quote(j.phase) + ",\"old_sequence\":" + std::to_string(j.old_sequence) +
+    std::string out = "{\"transaction_schema_version\":2,\"retain_backups\":" +
+                      std::string(j.retain_backups ? "true" : "false") +
+                      ",\"transaction_id\":" + quote(j.id) + ",\"platform\":" + quote(j.platform) +
+                      ",\"language\":" + quote(j.language) + ",\"phase\":" + quote(j.phase) +
+                      ",\"old_sequence\":" + std::to_string(j.old_sequence) +
                       ",\"new_sequence\":" + std::to_string(j.new_sequence) + ",\"operations\":[";
     bool first = true;
     for (const auto &op : j.operations) {
@@ -51,10 +54,19 @@ Journal decode(std::string_view bytes) {
     using namespace json;
     auto doc = parse(bytes);
     auto value = yyjson_doc_get_root(doc.get());
-    fields(value, {"transaction_schema_version", "transaction_id", "platform", "language", "phase",
-                   "old_sequence", "new_sequence", "operations"});
-    require(number(get(value, "transaction_schema_version")) == 1, "Unsupported transaction schema");
+    fields(value,
+           {"transaction_schema_version", "transaction_id", "platform", "language", "phase", "old_sequence",
+            "new_sequence", "operations"},
+           {"retain_backups"});
+    const auto schema = number(get(value, "transaction_schema_version"));
+    require(schema == 1 || schema == 2, "Unsupported transaction schema");
     Journal j;
+    j.retain_backups = true; // Existing v1 journals used .launcher/backups.
+    if (schema == 2) {
+        const auto retain = get(value, "retain_backups");
+        require(yyjson_is_bool(retain), "Invalid backup retention policy");
+        j.retain_backups = yyjson_get_bool(retain);
+    }
     j.id = string(get(value, "transaction_id"));
     j.platform = string(get(value, "platform"));
     j.language = string(get(value, "language"));
@@ -98,13 +110,19 @@ void install_copy(const SafeRoot &root, const std::string &from, const std::stri
 void cleanup_completed(const SafeRoot &root, const Journal &j, const Inventory &desired,
                        TransactionResult &result) {
     try {
+        if (!j.retain_backups) {
+            result.preserved.clear();
+            discard_launcher_tree(root, ".launcher/recovery/" + j.id);
+            discard_launcher_tree(root, ".launcher/staging/" + j.id);
+            return;
+        }
         for (const auto &op : j.operations) {
-            const auto name = backup(j.id) + "original/" + op.path;
+            const auto name = backup(j) + "original/" + op.path;
             if (!op.original_hash.empty() &&
                 std::find(result.preserved.begin(), result.preserved.end(), name) == result.preserved.end())
                 root.remove(name);
             for (const auto *kind : {"live/", "rollback-live/"}) {
-                const auto live = backup(j.id) + kind + op.path;
+                const auto live = backup(j) + kind + op.path;
                 if (root.exists(live)) {
                     auto file = root.open(live, FileMode::Read);
                     const auto hash = sha256_file(file);
@@ -207,7 +225,7 @@ void Transaction::prepare(const std::string &id, const LocalInstallation &old, c
                 op.original_size = file.size();
             }
             op.original_hash =
-                copy_verified(root_, path, root_, backup(id) + "original/" + path, checkpoint_, progress_);
+                copy_verified(root_, path, root_, backup(j) + "original/" + path, checkpoint_, progress_);
             if (!matches_original(root_, op))
                 fail(ErrorCategory::Filesystem, "File changed while preparing a backup: " + path);
         }
@@ -242,6 +260,8 @@ TransactionResult Transaction::recover() {
     TransactionResult result;
     if (!root_.exists(journal_path)) {
         try {
+            discard_launcher_tree(root_, ".launcher/recovery");
+            discard_launcher_tree(root_, ".launcher/discarded-mods");
             const auto scratch = root_.path() / ".launcher/staging";
             if (std::filesystem::exists(scratch))
                 reclaim_staging(SafeRoot(scratch));
@@ -251,10 +271,12 @@ TransactionResult Transaction::recover() {
         return result;
     }
     auto j = decode(root_.read(journal_path, 16 * 1024 * 1024));
-    const auto prefix = staging(j.id), back = backup(j.id);
+    const auto prefix = staging(j.id), back = backup(j);
     auto target =
         verify_manifest(root_.read(prefix + "target.envelope.json", 16 * 1024 * 1024), keys_, policy_);
     auto desired = desired_files(target, j.platform, j.language);
+    auto authorized = desired;
+    authorized.insert(target.initial_data.files.begin(), target.initial_data.files.end());
     std::optional<InstalledState> old;
     std::optional<Manifest> old_manifest;
     if (root_.exists(prefix + "old.envelope.json"))
@@ -269,15 +291,22 @@ TransactionResult Transaction::recover() {
     bool can_finish = true;
     for (const auto &op : j.operations) {
         if (op.action == "replace") {
-            if (!desired.contains(op.path))
+            if (!authorized.contains(op.path))
                 fail(ErrorCategory::Recovery, "Journal replacement is not authorized by target signature");
+            if (target.initial_data.files.contains(op.path)) {
+                const auto folder = op.path.substr(0, op.path.find('/'));
+                if (!op.original_hash.empty() || (old && old->initialized_folders.contains(folder)))
+                    fail(ErrorCategory::Recovery, "Initial data cannot replace existing user files");
+                desired.emplace(op.path, authorized.at(op.path));
+            }
             if (!file_matches(root_, desired.at(op.path))) {
                 auto staged = desired.at(op.path);
                 staged.path = prefix + "final/" + op.path;
                 if (!file_matches(root_, staged))
                     can_finish = false;
             }
-        } else if (!old || !old->files.contains(op.path) || desired.contains(op.path))
+        } else if (!old || !old->files.contains(op.path) || desired.contains(op.path) ||
+                   initial_data_path(target, op.path))
             fail(ErrorCategory::Recovery, "Journal removal is not authorized by previous signature");
         if (!op.original_hash.empty()) {
             if (!file_matches(root_,
@@ -376,7 +405,10 @@ TransactionResult Transaction::recover() {
         step(checkpoint_, "installed file verified and flushed");
     }
     root_.write_atomic(".launcher/installed_manifest.envelope.json", target.envelope, checkpoint_);
-    root_.write_atomic(".launcher/state.json", serialize_state(target, j.platform, j.language), checkpoint_);
+    root_.write_atomic(".launcher/state.json",
+                       serialize_state(target, j.platform, j.language,
+                                       old ? old->initialized_folders : std::set<std::string>{}),
+                       checkpoint_);
     root_.write_atomic("launcher_installed.txt",
                        "OpenBK2 Launcher " + std::string(build::version) + "\nGame: " + target.version +
                            "\nPlatform: " + j.platform + "\nLanguage: " + j.language +

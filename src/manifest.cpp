@@ -172,8 +172,11 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
     auto body = parse(m.payload, 12 * 1024 * 1024);
     root = yyjson_doc_get_root(body.get());
     const auto schema = number(get(root, "schema_version"));
-    require(schema == 1 || schema == 2, "Unsupported manifest schema");
-    if (schema == 2)
+    require(schema >= 1 && schema <= 3, "Unsupported manifest schema");
+    if (schema == 3)
+        fields(root, {"schema_version", "release", "min_launcher_version", "packages", "platforms",
+                      "languages", "mods", "initial_data"});
+    else if (schema == 2)
         fields(root, {"schema_version", "release", "min_launcher_version", "packages", "platforms",
                       "languages", "mods"});
     else
@@ -199,6 +202,8 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
             "This release requires a newer launcher; update manually");
     require(schema == 1 || required_version >= std::array<unsigned long, 3>{0, 2, 0},
             "Schema v2 requires launcher 0.2.0");
+    require(schema < 3 || required_version >= std::array<unsigned long, 3>{0, 3, 0},
+            "Schema v3 requires launcher 0.3.0");
     for (auto item : array(get(root, "packages"))) {
         fields(item, {"id", "kind", "platform", "url", "size", "unpacked_size", "sha256", "files"});
         PackageRecord p;
@@ -210,12 +215,12 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
         p.unpacked_size = number(get(item, "unpacked_size"));
         p.sha256 = digest(get(item, "sha256"));
         require(p.kind == "snapshot" || p.kind == "patch" || p.kind == "language" ||
-                    (schema == 2 && p.kind == "mod"),
+                    (schema >= 2 && p.kind == "mod") || (schema >= 3 && p.kind == "initial"),
                 "Unknown package kind");
-        require(((p.kind == "language" || p.kind == "mod") && p.platform == "any") ||
+        require(((p.kind == "language" || p.kind == "mod" || p.kind == "initial") && p.platform == "any") ||
                     ((p.kind == "snapshot" || p.kind == "patch") &&
                      (p.platform == "windows-x64" || p.platform == "linux-x64" ||
-                      (schema == 2 && p.platform == "any"))),
+                      (schema >= 2 && p.platform == "any"))),
                 "Invalid package platform");
         require(safe_url(p.url, policy), "Unsafe package URL");
         require(p.size > 0 && p.size <= package_limit && p.unpacked_size <= unpack_limit,
@@ -237,7 +242,7 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
         const auto it = m.packages.find(id);
         require(it != m.packages.end(), "Unknown package reference");
         require(it->second.kind == kind && (it->second.platform == platform ||
-                                            (schema == 2 && (kind == "snapshot" || kind == "patch") &&
+                                            (schema >= 2 && (kind == "snapshot" || kind == "patch") &&
                                              it->second.platform == "any")),
                 "Package membership mismatch");
         used.insert(id);
@@ -346,7 +351,7 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
         m.languages.emplace(locale, std::move(l));
     }
     require(!m.languages.empty() && m.languages.size() <= 64, "Invalid language count");
-    if (schema == 2) {
+    if (schema >= 2) {
         Paths mod_names;
         for (const auto &[id, v] : object(get(root, "mods"))) {
             require(matches(id, "[A-Za-z0-9][A-Za-z0-9_-]{0,63}"), "Invalid mod identifier");
@@ -384,6 +389,46 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
         }
         require(m.mods.size() <= 256, "Too many mods");
     }
+    if (schema >= 3) {
+        const auto value = get(root, "initial_data");
+        fields(value, {"folders", "files", "package_ids"});
+        auto &initial = m.initial_data;
+        Paths folders;
+        for (auto item : array(get(value, "folders"))) {
+            const auto folder = string(item), key = path_key(folder);
+            folders.add(folder);
+            require(folder.find('/') == folder.npos && key != ".launcher" && key != "bin" && key != "data" &&
+                        key != "mods" && key != "launcher_installed.txt" &&
+                        !key.starts_with("openbk2launcher"),
+                    "Unsafe initial-data folder");
+            initial.folders.insert(folder);
+        }
+        require(initial.folders.size() <= 64, "Too many initial-data folders");
+        initial.files = inventory(get(value, "files"), true);
+        initial.packages = ids(get(value, "package_ids"));
+        Inventory packaged;
+        for (const auto &id : initial.packages)
+            for (const auto &[path, f] : package(id, "initial", "any").files)
+                require(packaged.emplace(path, f).second, "Overlapping initial packages");
+        require(packaged.size() == initial.files.size(), "Initial package coverage mismatch");
+        std::set<std::string> populated;
+        std::uint64_t size = 0;
+        for (const auto &[path, f] : initial.files) {
+            const auto slash = path.find('/');
+            require(slash != path.npos && !f.executable,
+                    "Initial data must be non-executable files inside folders");
+            populated.insert(path.substr(0, slash));
+            validate_game_path(path, {path});
+            require(packaged.contains(path) && same_bytes(f, packaged.at(path)),
+                    "Initial package bytes mismatch");
+            require(f.size <= unpack_limit - size, "Initial-data size limit exceeded");
+            size += f.size;
+        }
+        require(populated == initial.folders, "Initial-data folders must contain files");
+        for (const auto &[platform, target] : m.platforms)
+            for (const auto &[path, f] : target.files)
+                require(!initial_data_path(m, path), "Initial-data folders overlap managed game files");
+    }
     require(used.size() == m.packages.size(), "Unreferenced packages");
     return m;
 }
@@ -398,5 +443,10 @@ Inventory desired_files(const Manifest &m, const std::string &platform, const st
     const auto &f = m.languages.at(language).file;
     result.emplace(f.path, f);
     return result;
+}
+bool initial_data_path(const Manifest &m, std::string_view path) {
+    const auto top = path_key(path.substr(0, path.find('/')));
+    return std::any_of(m.initial_data.folders.begin(), m.initial_data.folders.end(),
+                       [&](const auto &folder) { return path_key(folder) == top; });
 }
 } // namespace launcher

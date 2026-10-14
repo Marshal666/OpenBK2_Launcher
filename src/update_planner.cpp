@@ -24,13 +24,30 @@ UpdatePlan plan_update(const SafeRoot &root, const LocalInstallation &local, con
                          local.authenticated_manifest->payload_hash);
     UpdatePlan plan;
     plan.desired = desired_files(target, platform, language);
-    for (const auto &[path, f] : plan.desired)
+    for (const auto &[path, f] : plan.desired) {
+        if (local.installed)
+            for (const auto &folder : local.installed->initialized_folders)
+                if (path_key(folder) == path_key(path.substr(0, path.find('/'))))
+                    fail(ErrorCategory::Manifest,
+                         "Release attempts to manage an initialized user folder: " + folder);
         if (mode == InstallMode::Reinstall || !file_matches(root, f, stop))
             plan.changed.emplace(path, f);
+    }
+    // Initialized folders are permanently user-owned, including deliberately
+    // deleted defaults. Only a new folder's missing files are seeded.
+    for (const auto &[path, f] : target.initial_data.files) {
+        const auto folder = path.substr(0, path.find('/'));
+        bool initialized = false;
+        if (local.installed)
+            for (const auto &prior : local.installed->initialized_folders)
+                initialized |= path_key(prior) == path_key(folder);
+        if (!initialized && !root.exists(path))
+            plan.changed.emplace(path, f);
+    }
     if (local.installed && local.installed->platform == platform)
         for (const auto &[path, f] : local.installed->files) {
             (void)f;
-            if (!plan.desired.contains(path))
+            if (!plan.desired.contains(path) && !initial_data_path(target, path))
                 plan.remove.push_back(path);
         }
     const auto &base = target.platforms.at(platform);
@@ -102,6 +119,12 @@ UpdatePlan plan_update(const SafeRoot &root, const LocalInstallation &local, con
     const auto &locale = target.languages.at(language);
     if (plan.changed.contains(locale.file.path))
         plan.packages.push_back(locale.package_id);
+    for (const auto &id : target.initial_data.packages) {
+        const auto &p = target.packages.at(id);
+        if (std::any_of(p.files.begin(), p.files.end(),
+                        [&](const auto &entry) { return plan.changed.contains(entry.first); }))
+            plan.packages.push_back(id);
+    }
     std::set<std::string> seen;
     for (const auto &id : plan.packages) {
         if (!seen.insert(id).second)

@@ -171,9 +171,13 @@ def main():
         extra.write_bytes(b"player settings")
         install(root, releases[0], mode="repair")
         assert edited.read_bytes() == b"player edit" and extra.exists()
-        backup = root / mod(root, command="remove")
-        assert (backup / "assets/0.pak").read_bytes() == b"player edit"
-        assert (backup / "player.cfg").read_bytes() == b"player settings"
+        backup_path = mod(root, command="remove")
+        if backup_path:
+            backup = root / backup_path
+            assert (backup / "assets/0.pak").read_bytes() == b"player edit"
+            assert (backup / "player.cfg").read_bytes() == b"player settings"
+        else:
+            assert not any((root / ".launcher/discarded-mods").rglob("*.pak"))
         assert not (root / "MODs/Alpha").exists()
         mod(root, command="remove", mid="../Data", code=1)
         mod(root, command="remove", mid="Alpha/assets", code=1)
@@ -194,7 +198,10 @@ def main():
             mod(crash_root, command="remove", fault=fault, code=86)
             assert (crash_root / "MODs/Alpha").exists() == (fault == 1)
             backups = list((crash_root / ".launcher/backups").glob("removed-mods/*/Alpha"))
-            assert len(backups) == (1 if fault == 2 else 0)
+            temporary = list((crash_root / ".launcher/discarded-mods").glob("*/Alpha"))
+            assert len(backups) + len(temporary) == (1 if fault == 2 else 0)
+            install(crash_root, releases[0], command="recover")
+            assert not (crash_root / ".launcher/discarded-mods").exists()
             install(crash_root, releases[0], command="verify")
 
         # Competing updater lock blocks both operations.
@@ -211,8 +218,10 @@ def main():
         local.mkdir()
         (local / "save.txt").write_bytes(b"local save")
         mod(root, code=1)
-        backup = root / mod(root, command="remove", mid="Local mod")
-        assert (backup / "save.txt").read_bytes() == b"local save"
+        backup_path = mod(root, command="remove", mid="Local mod")
+        if backup_path:
+            assert (root / backup_path / "save.txt").read_bytes() == b"local save"
+        assert not local.exists()
         outside = temp / "outside"
         outside.mkdir()
         (outside / "keep.txt").write_bytes(b"keep")

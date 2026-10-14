@@ -4,7 +4,8 @@ Only an envelope signed by a compiled trusted Ed25519 public key can define
 installable game state. The original payload bytes are verified before parsing;
 JSON reserialization is never part of signature verification. Unknown keys,
 unknown critical fields, duplicate properties, unsupported schemas and invalid
-inventories fail closed. SHA-256 verifies both ZIP bytes and every managed file.
+inventories fail closed. SHA-256 verifies ZIP bytes and managed files during
+installation/update/Repair and recovery, not during ordinary startup or Play.
 
 HTTPS certificate/hostname validation is mandatory, with TLS 1.2 minimum and
 HTTPS-only redirects. Production has no certificate-bypass switch. Resumable
@@ -20,9 +21,13 @@ opt-ins; all other entries are user-owned. Optional downloads use a signed v2
 mod catalog scoped strictly to one `MODs/<id>/` folder, with no base-game overlap.
 Archives and extracted bytes are verified before atomic folder publication.
 Mods remain editable afterward, outside base-game integrity checks. Explicit
-Remove actions move complete folders into recoverable backups; they do not
-delete user files or grant an unsigned receipt authority over game data.
-Modified and conflicting base originals are backed up before replacement.
+Remove actions require confirmation and permanently discard the selected
+folder by default. Temporary originals support interrupted-operation recovery;
+retained backups are disabled unless `OBK_RETAIN_USER_BACKUPS=ON` is configured.
+Initial data has a separate signed v3 inventory: missing defaults are seeded
+once, then the folders are user-owned. Explicit Reset replaces all contents of
+the declared folders after warning that personal data will be lost. No unsigned
+receipt grants authority over unrelated game paths.
 Deletion requires an authenticated prior inventory, not merely editable state.
 
 Installation paths must be absolute dedicated folders, not filesystem/drive/share
@@ -33,7 +38,9 @@ personal files do not belong in staging or cache directories.
 
 An OS writer lock covers recovery, updates, mod operations and launcher relocation. A durable journal plus signed
 inventories and verified backups supports repeatable commit or rollback. Play
-requires complete signed local state, matching files and no pending transaction.
+requires authenticated local state, a safely opened native launch file with the
+expected size, and no pending transaction. Startup/Play do not scan/hash game
+assets; modified or damaged assets can reach the game until Update/Repair runs.
 Cancellation is deferred during commit. Linux executable modes are restored;
 game launch uses native argument vectors and a constrained signed environment.
 Running-game detection is best effort for external processes. Hostile same-user
@@ -69,3 +76,5 @@ exit and matching source bytes, and deletes only that source executable.
 
 See the [filesystem safety review](docs/SECURITY_AUDIT.md) and
 [acceptance results](docs/ACCEPTANCE.md) for measured coverage and limitations.
+The [0.3 behavior decision](docs/ADR/0003-initial-data-startup-and-backups.md)
+supersedes earlier pre-Play scanning and retained-backup behavior.

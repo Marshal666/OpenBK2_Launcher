@@ -8,7 +8,7 @@ from release import build_release, sign_release
 from signing import stable_json
 
 
-def build_shared_fixtures(root, game=None, count=5, hold_game=False):
+def build_shared_fixtures(root, game=None, count=5, hold_game=False, initial_data=False):
     root = Path(root)
     key = Ed25519PrivateKey.generate()
     shared, windows, linux, languages, mods = [root / name for name in ("shared", "windows", "linux", "languages", "mods")]
@@ -24,6 +24,10 @@ def build_shared_fixtures(root, game=None, count=5, hold_game=False):
         write((windows if sys.platform == "win32" else linux) / ("bin/Game.exe" if sys.platform == "win32" else "bin/Game"), Path(game).read_bytes())
     (linux / "bin/Game").chmod(0o755)
     write(languages / "texts-en.pak", b"English fixture")
+    initial = root / "initial"
+    if initial_data:
+        write(initial / "Editor/default.cfg", b"editor default")
+        write(initial / "Profiles/default.cfg", b"profile default")
     for i in range(3):
         write(mods / f"Alpha/assets/{i}.pak", random.Random(i).randbytes(100 * 1024))
     write(mods / "Beta/readme.txt", b"A different mod")
@@ -34,7 +38,8 @@ def build_shared_fixtures(root, game=None, count=5, hold_game=False):
         out = root / f"release-{sequence}"
         manifest = build_release(out=out, version=f"0.2.{sequence}", sequence=sequence,
                       roots={"windows-x64": windows, "linux-x64": linux}, shared_root=shared,
-                      languages_dir=languages, mods_dir=mods, base_url=f"https://example.com/v{sequence}",
+                      languages_dir=languages, mods_dir=mods, shared_init_data=initial if initial_data else None,
+                      base_url=f"https://example.com/v{sequence}",
                       previous=releases[-1] if releases else None,
                       package_limit=300 * 1024 if not game else 8 * 1024 * 1024)
         if hold_game:

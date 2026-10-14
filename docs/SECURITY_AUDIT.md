@@ -1,5 +1,9 @@
 # Filesystem and relocation safety review — 2026-10-14
 
+This is the 0.2 behavior review. Launcher 0.3 deliberately changes pre-Play
+scanning and retained backups; see [the updated decision](ADR/0003-initial-data-startup-and-backups.md)
+and [current security model](../SECURITY.md).
+
 This review covers installation/adoption, deletion and cleanup, missing local
 metadata, launcher relocation and overlapping processes. It includes source review
 and native tests on Windows 11 and Ubuntu 22.04 using disposable signed fixtures.

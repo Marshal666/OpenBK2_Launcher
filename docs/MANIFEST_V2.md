@@ -57,7 +57,8 @@ user-directory allowlist. Player edits after installation are allowed. Download
 requires the catalog's payload hash to equal the authenticated installed game
 manifest; a newer catalog first requires a game update. No separate editable
 mod receipt can grant deletion authority. Removal is an explicit user action
-that retains the selected folder in a backup, including manually installed mods.
+that removes the selected folder, including manually installed mods. In launcher
+0.3.0, retained backups are disabled by default; see the current recovery protocol.
 
 See [publishing instructions](PUBLISHING.md#optional-mod-downloads) and the
 [folder transaction protocol](UPDATE_PROTOCOL.md#optional-mod-folder-operations).

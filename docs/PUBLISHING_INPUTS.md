@@ -10,8 +10,8 @@ The example path `C:/Users/you/OpenBK2-Publishing` corresponds to
 ## What the input and output paths mean
 
 The publisher takes **unpacked game files** as input. Use a shared folder for
-common files and a separate folder for each platform's files. Together, shared
-plus platform files must form a complete game installation. The publisher scans
+common files and a separate folder for each platform's files. Together, shared,
+initial-data and platform files must form a complete game installation. The publisher scans
 them and creates its own ZIP packages plus a signed manifest. There is no
 command to register arbitrary existing ZIP files or assign their URLs directly
 to launcher buttons.
@@ -19,11 +19,12 @@ to launcher buttons.
 | Argument / placeholder | Meaning | Concrete Windows example |
 |---|---|---|
 | `--shared-root <root>` | Optional common game files. Packaged once and referenced by both platforms. | `C:/Users/you/OpenBK2-Publishing/input/shared` |
+| `--shared-init-data <root>` | Optional defaults installed once, then user-owned; contains game-relative folders such as `Editor/` and `Profiles/`. | `C:/Users/you/OpenBK2-Publishing/input/initial` |
 | `--windows-root <root>` | Windows-only files in their game-relative layout, including `bin/Game.exe`. Without a shared root, supply a complete Windows installation. | `C:/Users/you/OpenBK2-Publishing/input/windows` |
 | `--linux-root <root>` | Linux-only files in their game-relative layout, including `bin/Game`. Without a shared root, supply a complete Linux installation. | `C:/Users/you/OpenBK2-Publishing/input/linux` |
 | `--mods-dir <mods>` | Optional downloadable mods, one subfolder per mod. These are separate from the base game. | `C:/Users/you/OpenBK2-Publishing/input/mods` |
 | `--languages-dir <languages>` | Folder containing unpacked `texts-en.pak`, `texts-de.pak`, etc., directly inside it. At least one language is required. | `C:/Users/you/OpenBK2-Publishing/input/languages` |
-| `--out <empty-output>` | Local release staging folder created/populated by `build`. It must be absent or empty and outside the shared/platform/mod input folders. | `C:/Users/you/OpenBK2-Publishing/releases/0.1.0` |
+| `--out <empty-output>` | Local release staging folder created/populated by `build`. It must be absent or empty and outside every game/initial-data/mod input folder. | `C:/Users/you/OpenBK2-Publishing/releases/0.1.0` |
 | `--release-dir <output>` | That same staging folder, reused by `sign`, `verify` and `publish-github`. | `C:/Users/you/OpenBK2-Publishing/releases/0.1.0` |
 | `--previous-release <prior-output>` | The retained publisher output for the preceding release, including metadata and ZIPs. | `C:/Users/you/OpenBK2-Publishing/releases/0.1.0` when building `0.1.1` |
 | `--base-url` | Future public URL prefix for this release's generated ZIPs. It is recorded in the manifest during `build`. | `https://github.com/YOUR_ACCOUNT/OpenBK2-Game-Releases/releases/download/v0.1.0` |
@@ -48,8 +49,8 @@ are shared. Prepare the following folders before calling the publisher:
 | Windows `bin.zip` | Only `input/windows/bin/`, including `Game.exe` and Windows DLLs. |
 | Linux `bin.zip` | Only `input/linux/bin/`, including `Game` and Linux libraries. |
 | `data.zip` | `input/shared/Data/`. Each shared file is supplied and hosted once. |
-| `profiles.zip` | Only required official baseline files in `input/shared/Profiles/`; see the opt-in rule below. Personal saves/settings must not be distributed as official files. |
-| `extras.zip` | Common extras in their game-relative locations under `input/shared/`, e.g. `Editor/` and `splash.bmp`. A Windows-only extra goes in the Windows tree only. |
+| `profiles.zip` | Clean defaults in `input/initial/Profiles/`, supplied with `--shared-init-data`. Do not publish personal saves/settings. |
+| `extras.zip` | Immutable extras such as `splash.bmp` under `input/shared/`; game-modified defaults such as `Editor/` under `input/initial/`. A Windows-only immutable extra goes in the Windows tree only. |
 
 Inspect each archive's layout when extracting. If `data.zip` already contains
 `Data/base.pak`, extract it at the game root. If it contains `base.pak` directly,
@@ -67,11 +68,12 @@ C:/Users/you/OpenBK2-Publishing/
     shared/
       Data/
         base.pak
+      splash.bmp
+    initial/
       Editor/
         editor.dat
       Profiles/
         official.dat
-      splash.bmp
     windows/
       bin/
         Game.exe
@@ -119,6 +121,53 @@ executable is automatically marked executable. For other Linux executables,
 preserve their execute bits and package on Linux if your Windows filesystem or
 archive extraction tool cannot represent those permissions.
 
+## Initial data
+
+`--shared-init-data "C:/Users/you/OpenBK2-Publishing/input/initial"` takes a separate
+input tree, for example:
+
+```text
+input/initial/
+  Editor/default.cfg
+  Profiles/default.cfg
+  Profiles/default-player/options.dat
+```
+
+These files are packaged once for both platforms as `initial-any-<sha256>.zip`
+and authenticated like every other download. Supply unpacked files, not ZIPs.
+Initial files must live under portable top-level folders. `bin`, `Data`, `MODs`,
+launcher metadata and launcher filenames are forbidden. Whole initial-data
+folders must be absent from the managed shared/platform inputs. Empty folders
+and executable initial files are not supported; initial files are always installed
+without execute permissions.
+
+On first installation/adoption, only missing files are copied. Existing content
+is preserved. Each folder is then recorded as initialized. Updates, Repair and
+Full reinstall leave it untouched, even if the game modifies or deletes defaults.
+New defaults in a later release are used by fresh installations and Reset;
+they are not silently inserted into an initialized folder. A newly introduced
+top-level initial-data folder is initialized once when that release is installed.
+
+**Settings > Reset initial data** restores the installed release's defaults in
+all declared initial-data folders. It replaces their entire contents, including
+user-created saves/settings, after confirmation. With the default backup policy,
+this is permanent. Published defaults are fetched again when absent from cache;
+personal changes cannot be reconstructed from GitHub. The game must be closed.
+Downloads are verified before any live folder changes; interrupted resets finish
+or restore the original folders from temporary recovery copies.
+
+To migrate an existing release, move the entire `Editor/` and/or `Profiles/`
+input folders into `input/initial/`, remove their `--managed-user-file` options,
+add `--shared-init-data`, and build/sign/publish a **higher sequence** with
+`--previous-release`. Migration preserves existing files and relinquishes base
+ownership without deleting them. Initialized folders cannot subsequently become
+managed base folders. Removing defaults from a release does not delete user data;
+the once-only markers survive and prevent reseeding if defaults return later.
+
+This requires launcher **0.3.0 or newer** and [manifest v3](MANIFEST_V3.md).
+Rebuild/distribute the production launcher with the same URL/key before publishing
+the new manifest. Older launchers reject the new schema.
+
 ## Profiles, MODs and language files
 
 `Profiles/` and `MODs/` are user-owned by default: their files are **excluded even
@@ -126,8 +175,9 @@ when present in an input root**. If `Profiles/official.dat` is a required offici
 baseline, explicitly add `--managed-user-file Profiles/official.dat` to `build`.
 Repeat the option for each exact official file; directory-wide opt-ins and
 wildcards are not supported. Do not opt in ordinary player saves or settings.
-The launcher preserves unknown files and backs up modified official files before
-replacing them.
+The launcher preserves unknown files. Edits to managed official files are lost
+when replaced with the default backup policy. Prefer initial data for anything
+the game modifies.
 
 The CLI applies the same explicit allowlist to both targets, so each allowlisted
 path must exist in each combined shared-plus-platform inventory. A shared
@@ -160,14 +210,13 @@ They must first update the game to the catalog's release and close the game.
 Only one mod folder can be present; remove the current one before downloading
 another. Existing manually added folders are listed too.
 
-**Remove** asks for confirmation, then moves the entire selected folder,
-including player edits and extra files, to
-`.launcher/backups/removed-mods/<unique-id>/<mod-id>/`. It does not delete it.
-To restore a backup manually, close the game and launcher, ensure `MODs` has no
-other mod folder, and move that folder back to `MODs/<mod-id>/`.
+**Remove** asks for confirmation, then permanently removes the selected folder,
+including player edits and extra files. Download can restore only published
+defaults. The retained-backup implementation remains available through the
+developer build option `OBK_RETAIN_USER_BACKUPS=ON`; it is disabled by default.
 Protected base-game folders cannot be removed through this control. Folders
-with unsafe paths or links require manual inspection. Backups use the same disk;
-archive old backups manually if the updater's 8 GiB retention limit is reached.
+with unsafe paths or links require manual inspection. Backups from earlier
+launcher versions are not automatically deleted.
 
 Optional mods do **not** need `--managed-user-file`; they have their own signed
 ownership scope. Do not also put them in shared/platform roots as base files.
@@ -196,7 +245,8 @@ Shared data or optional mods produce [manifest v2](MANIFEST_V2.md), requiring
 launcher **0.2.0 or newer** regardless of the game version. Update older launcher
 executables before publishing v2 to their endpoint. Without either feature, a
 new release lineage uses [v1](MANIFEST_V1.md); an existing v2 lineage stays v2.
-Launcher 0.2.0 supports both schemas.
+Initial data produces v3 and requires launcher 0.3.0. Existing v3 lineages stay
+v3; launcher 0.3.0 supports all three schemas.
 
 For mutable or generated files elsewhere in a game root, add repeatable
 `--exclude <glob>` options, such as `--exclude "bin/*.log"`. Patterns match

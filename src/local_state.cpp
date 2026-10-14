@@ -19,9 +19,10 @@ std::string utc_now() {
     return text;
 }
 } // namespace
-std::string serialize_state(const Manifest &m, const std::string &platform, const std::string &language) {
+std::string serialize_state(const Manifest &m, const std::string &platform, const std::string &language,
+                            std::set<std::string> initialized_folders) {
     using json::quote;
-    std::string data = "{\"state_schema_version\":1,\"installed_release\":{\"version\":" + quote(m.version) +
+    std::string data = "{\"state_schema_version\":2,\"installed_release\":{\"version\":" + quote(m.version) +
                        ",\"sequence\":" + std::to_string(m.sequence) +
                        ",\"signed_payload_sha256\":" + quote(m.payload_hash) +
                        "},\"platform\":" + quote(platform) + ",\"installed_language\":" + quote(language) +
@@ -35,6 +36,15 @@ std::string serialize_state(const Manifest &m, const std::string &platform, cons
         data += "{\"path\":" + quote(path) + ",\"size\":" + std::to_string(f.size) +
                 ",\"sha256\":" + quote(f.sha256) + "}";
     }
+    data += "],\"initialized_folders\":[";
+    initialized_folders.insert(m.initial_data.folders.begin(), m.initial_data.folders.end());
+    first = true;
+    for (const auto &folder : initialized_folders) {
+        if (!first)
+            data += ',';
+        first = false;
+        data += quote(folder);
+    }
     return data + "],\"updated_utc\":" + quote(utc_now()) + "}";
 }
 InstalledState parse_state(std::string_view state, Manifest manifest) {
@@ -44,8 +54,22 @@ InstalledState parse_state(std::string_view state, Manifest manifest) {
     fields(value,
            {"state_schema_version", "installed_release", "platform", "installed_language",
             "highest_accepted_sequence", "managed_files", "updated_utc"},
-           {"requested_language"});
-    require(number(get(value, "state_schema_version")) == 1, "Unsupported local state schema");
+           {"requested_language", "initialized_folders"});
+    const auto schema = number(get(value, "state_schema_version"));
+    require(schema == 1 || schema == 2, "Unsupported local state schema");
+    std::set<std::string> initialized;
+    if (schema == 2) {
+        for (auto item : array(get(value, "initialized_folders"))) {
+            const auto folder = string(item);
+            validate_relative_path(folder);
+            require(folder.find('/') == folder.npos && initialized.insert(folder).second,
+                    "Invalid initialized folder");
+        }
+        require(initialized.size() <= 256, "Too many initialized folders");
+        for (const auto &folder : manifest.initial_data.folders)
+            require(initialized.contains(folder), "Initial-data installation was not completed");
+    } else
+        require(manifest.initial_data.folders.empty(), "Initial-data installation requires state v2");
     auto installed = get(value, "installed_release");
     fields(installed, {"version", "sequence", "signed_payload_sha256"});
     require(number(get(installed, "sequence")) == manifest.sequence &&
@@ -66,11 +90,12 @@ InstalledState parse_state(std::string_view state, Manifest manifest) {
                 "Local state file differs from signed inventory");
     }
     require(seen.size() == expected.size(), "Local inventory is incomplete");
-    return {std::move(manifest), platform, language, std::move(expected)};
+    return {std::move(manifest), platform, language, std::move(expected), std::move(initialized)};
 }
 LocalInstallation load_local(const SafeRoot &root, const TrustedKeys &keys, ManifestPolicy policy) {
     LocalInstallation result;
-    result.pending_recovery = root.exists(".launcher/transaction.json");
+    result.pending_recovery =
+        root.exists(".launcher/transaction.json") || root.exists(".launcher/initial-reset.json");
     try {
         if (root.exists(".launcher/installed_manifest.envelope.json"))
             result.authenticated_manifest = verify_manifest(
@@ -94,7 +119,7 @@ bool file_matches(const SafeRoot &root, const FileRecord &f, std::stop_token sto
     return file.size() == f.size && sha256_file(file, stop) == f.sha256;
 }
 bool verify_installation(const SafeRoot &root, const InstalledState &state, std::stop_token stop) {
-    if (root.exists(".launcher/transaction.json"))
+    if (root.exists(".launcher/transaction.json") || root.exists(".launcher/initial-reset.json"))
         return false;
     for (const auto &[path, file] : state.files) {
         if (!file_matches(root, file, stop))
@@ -105,6 +130,22 @@ bool verify_installation(const SafeRoot &root, const InstalledState &state, std:
             return false;
 #endif
     }
+    return true;
+}
+bool installation_ready(const SafeRoot &root, const InstalledState &state) {
+    if (root.exists(".launcher/transaction.json") || root.exists(".launcher/initial-reset.json"))
+        return false;
+    const auto &profile = state.manifest.platforms.at(state.platform).launch;
+    if (!root.exists(profile.executable))
+        return false;
+    auto file = root.open(profile.executable, FileMode::Read);
+    const auto &expected = state.files.at(profile.executable);
+    if (file.size() != expected.size)
+        return false;
+#ifndef _WIN32
+    if (!file.executable())
+        return false;
+#endif
     return true;
 }
 } // namespace launcher

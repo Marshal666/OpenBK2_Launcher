@@ -162,7 +162,10 @@ def main():
             thread.join()
             server.server_close()
         retained = list((temp / "mods-game/.launcher/backups/removed-mods").glob("*/Alpha/user.cfg"))
-        assert len(retained) == 1 and retained[0].read_text() == "player edit"
+        keep_backups = subprocess.check_output([str(driver), "backup-policy", "unused"], text=True).strip() == "true"
+        assert len(retained) == int(keep_backups)
+        if keep_backups:
+            assert retained[0].read_text() == "player edit"
         assert (temp / "mods-game/MODs/Beta/readme.txt").exists()
     print(f"{checks} native command checks; offline Play, language persistence, cwd/argv, process exclusion, shortcut, handoff, collision and GUI install passed")
 
