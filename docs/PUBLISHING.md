@@ -325,7 +325,51 @@ JSON with `key_id`, `payload_b64` and `signature_b64`. That encoding is expected
 
 This is the step that connects the app to your published game. Install the
 native build prerequisites from the [README](../README.md#build-and-test).
-In the same PowerShell session, configure a **separate production build**:
+On Windows, run this from the repository folder in the same PowerShell session
+where you set `$ManifestUrl`, `$KeyId` and `$PublicKey`:
+
+```powershell
+./tools/build_production.ps1 -ManifestUrl $ManifestUrl -KeyId $KeyId -PublicKey $PublicKey
+```
+
+The helper runs configure, build and install, stopping if any step fails. It uses
+a **separate production build** in `build/production`, Windows x64, MinSizeRel,
+one build job, and disables fixtures and tests. Your Windows executable is
+`dist/production/OpenBK2Launcher-Windows-x64.exe`.
+
+**You do not need `cmake` on your terminal's PATH.** The helper checks PATH first,
+then finds Visual Studio's bundled CMake using its installer. This works in a
+normal PowerShell terminal or VS Code's integrated PowerShell terminal; no
+Developer Command Prompt is required. Visual Studio's C++ tools and Windows SDK
+must still be installed. If VS Code uses a different CMake installation, pass
+its executable path explicitly:
+
+```powershell
+./tools/build_production.ps1 -ManifestUrl $ManifestUrl -KeyId $KeyId -PublicKey $PublicKey `
+    -CMakePath 'C:/path/to/cmake.exe'
+```
+
+If PowerShell blocks local scripts, use a process-only execution policy override
+(this does not change your system's policy):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/build_production.ps1 `
+    -ManifestUrl $ManifestUrl -KeyId $KeyId -PublicKey $PublicKey
+```
+
+Optional parameters are `-Generator 'Visual Studio 17 2022'` (or
+`'Visual Studio 18 2026'`), `-Parallel 2`, `-BuildDirectory 'build/production'`
+and `-InstallPrefix 'dist/production'`. Relative build/install paths are resolved
+from the repository root, even when you invoke the script from another folder.
+The install prefix is where your **built launcher executable** goes; it does not
+set the player's game installation folder. Without `-Generator`, CMake reuses
+the existing build directory's generator or chooses its default for a new one.
+Changing generators requires a different build directory. Re-run the helper with
+the same three public trust values whenever you rebuild; keep private keys out
+of these arguments. `Get-Help ./tools/build_production.ps1 -Detailed` lists the
+parameters.
+
+For reference, the equivalent manual commands, when CMake is on PATH, are:
 
 ```powershell
 cmake -S . -B build/production -A x64 `
@@ -340,9 +384,6 @@ cmake --install build/production --config MinSizeRel --prefix dist/production
 This uses the installed Visual Studio generator. With VS 2022, add
 `-G "Visual Studio 17 2022"` to the configure command. With VS 2026, use
 `-G "Visual Studio 18 2026"` and a CMake version that supports it.
-
-Your Windows executable is
-`dist/production/OpenBK2Launcher-Windows-x64.exe`.
 
 For Linux, build natively on Linux using the README's prerequisites. In Bash,
 replace the three example trust values with the **same values** used on Windows:

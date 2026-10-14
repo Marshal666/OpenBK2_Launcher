@@ -122,6 +122,18 @@ public trust inputs, never private signing material. Production accepts no fixtu
 key, package-directory or loopback override flags. Launcher upgrades/key rotation
 require manual distribution of a new executable; there is no self-update.
 
+On Windows, [tools/build_production.ps1](tools/build_production.ps1) combines
+configure, build and install, and finds Visual Studio's bundled CMake if it is
+not on PATH:
+
+```powershell
+./tools/build_production.ps1 -ManifestUrl $ManifestUrl -KeyId $KeyId -PublicKey $PublicKey
+```
+
+The executable goes to `dist/production/OpenBK2Launcher-Windows-x64.exe`.
+See [publishing step 7](docs/PUBLISHING.md#step-7-build-the-production-launcher-with-your-url-and-public-key)
+for the values to supply, optional paths and terminal setup.
+
 ## Operation and maintenance
 
 Play verifies local managed bytes without requiring an online update check.
