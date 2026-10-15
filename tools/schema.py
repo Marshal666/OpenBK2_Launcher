@@ -95,7 +95,7 @@ def validate_payload(m, fixture=False):
     minimum = m["min_launcher_version"]
     require(isinstance(minimum, str) and re.fullmatch(r"[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}", minimum), "Invalid minimum launcher version")
     minimum = tuple(map(int, minimum.split(".")))
-    require(minimum <= (0, 3, 0), "Unsupported minimum launcher version")
+    require(minimum <= (0, 3, 1), "Unsupported minimum launcher version")
     require(schema == 1 or minimum >= (0, 2, 0), "Schema v2 requires launcher 0.2.0")
     require(schema < 3 or minimum >= (0, 3, 0), "Schema v3 requires launcher 0.3.0")
     packages, used = {}, set()
@@ -200,7 +200,9 @@ def validate_payload(m, fixture=False):
         require(isinstance(initial["folders"], list) and len(initial["folders"]) <= 64, "Invalid initial folders")
         paths_unique(initial["folders"])
         for folder in initial["folders"]:
-            require("/" not in folder and folder.lower() not in {".launcher", "bin", "data", "mods", "launcher_installed.txt"} and not folder.lower().startswith("openbk2launcher"), "Unsafe initial-data folder")
+            require("/" not in folder and folder.lower() not in {".launcher", "bin", "mods", "launcher_installed.txt"} and not folder.lower().startswith("openbk2launcher"), "Unsafe initial-data folder")
+            if folder.lower() == "data":
+                require(minimum >= (0, 3, 1), "Initial files in Data require launcher 0.3.1")
         files = inventory(initial["files"], True)
         require(sum(f["size"] for f in files.values()) <= UNPACK_LIMIT, "Initial-data size limit exceeded")
         require({path.split('/')[0] for path in files} == set(initial["folders"]), "Initial-data folders must contain files")
@@ -210,8 +212,11 @@ def validate_payload(m, fixture=False):
         require(len(initial["package_ids"]) == len(set(initial["package_ids"])), "Duplicate initial package reference")
         packaged = inventory([f for pid in initial["package_ids"] for f in package(pid, "initial", "any")["files"]])
         require(files.keys() == packaged.keys() and all(same_bytes(f, packaged[path]) for path, f in files.items()), "Initial package coverage mismatch")
-        folders = {folder.lower() for folder in initial["folders"]}
+        folders = {folder.lower() for folder in initial["folders"] if folder.lower() != "data"}
         for target in m["platforms"].values():
             require(not any(f["path"].split('/')[0].lower() in folders for f in target["files"]), "Initial-data folders overlap managed game files")
+            # Check full paths across all ownership scopes, including every language.
+            paths_unique([f["path"] for f in target["files"]] + list(files) +
+                         [lang["path"] for lang in m["languages"].values()])
     require(used == packages.keys(), "Unreferenced package")
     return m

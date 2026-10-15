@@ -10,7 +10,7 @@ namespace {
 constexpr auto journal_path = ".launcher/initial-reset.json";
 struct Reset {
     std::string id, hash, phase = "commit";
-    std::map<std::string, bool> folders{};
+    std::map<std::string, bool> paths{};
     bool retain = build::retain_user_backups;
 };
 void step(const FaultHook &hook, std::string_view text) {
@@ -43,13 +43,27 @@ void inspect_tree(const SafeRoot &folder) {
         }
     }
 }
+bool scope_exists(const SafeRoot &root, const std::string &path, bool file) {
+    if (!file)
+        return directory_exists(root, path);
+    if (!root.exists(path))
+        return false;
+    auto checked = root.open(path, FileMode::Read);
+    return true;
+}
+void move_scope(const SafeRoot &root, const std::string &from, const std::string &to, bool file) {
+    if (file)
+        root.rename(from, to);
+    else
+        root.rename_directory(from, to);
+}
 std::string encode(const Reset &reset) {
-    std::string text = "{\"reset_schema_version\":1,\"id\":" + json::quote(reset.id) +
+    std::string text = "{\"reset_schema_version\":2,\"id\":" + json::quote(reset.id) +
                        ",\"payload_sha256\":" + json::quote(reset.hash) +
                        ",\"phase\":" + json::quote(reset.phase) +
-                       ",\"retain_backups\":" + (reset.retain ? "true" : "false") + ",\"folders\":{";
+                       ",\"retain_backups\":" + (reset.retain ? "true" : "false") + ",\"paths\":{";
     bool first = true;
-    for (const auto &[folder, exists] : reset.folders) {
+    for (const auto &[folder, exists] : reset.paths) {
         if (!first)
             text += ',';
         first = false;
@@ -61,8 +75,10 @@ Reset decode(std::string_view text, const Manifest &manifest) {
     using namespace json;
     auto doc = parse(text);
     const auto value = yyjson_doc_get_root(doc.get());
-    fields(value, {"reset_schema_version", "id", "payload_sha256", "phase", "retain_backups", "folders"});
-    require(number(get(value, "reset_schema_version")) == 1, "Unsupported reset journal");
+    const auto schema = number(get(value, "reset_schema_version"));
+    require(schema == 1 || schema == 2, "Unsupported reset journal");
+    const char *paths_field = schema == 1 ? "folders" : "paths";
+    fields(value, {"reset_schema_version", "id", "payload_sha256", "phase", "retain_backups", paths_field});
     Reset reset;
     reset.id = string(get(value, "id"));
     reset.hash = string(get(value, "payload_sha256"));
@@ -72,17 +88,24 @@ Reset decode(std::string_view text, const Manifest &manifest) {
             "Invalid reset identity");
     require(yyjson_is_bool(get(value, "retain_backups")), "Invalid reset backup policy");
     reset.retain = yyjson_get_bool(get(value, "retain_backups"));
-    for (const auto &[folder, existed] : object(get(value, "folders"))) {
-        require(manifest.initial_data.folders.contains(folder) && yyjson_is_bool(existed),
-                "Reset folder is not authorized by installed signature");
-        reset.folders.emplace(folder, yyjson_get_bool(existed));
+    const auto authorized = initial_reset_paths(manifest);
+    for (const auto &[folder, existed] : object(get(value, paths_field))) {
+        require(authorized.contains(folder) && yyjson_is_bool(existed) &&
+                    (schema == 2 || !data_path(folder)),
+                "Reset path is not authorized by installed signature");
+        reset.paths.emplace(folder, yyjson_get_bool(existed));
     }
-    require(reset.folders.size() == manifest.initial_data.folders.size() && !reset.folders.empty(),
-            "Reset journal has incomplete folder inventory");
+    require(reset.paths.size() == authorized.size() && !reset.paths.empty(),
+            "Reset journal has incomplete path inventory");
     return reset;
 }
-bool matches_folder(const SafeRoot &root, const Manifest &manifest, const std::string &folder,
+bool matches_scope(const SafeRoot &root, const Manifest &manifest, const std::string &folder,
                     const std::string &prefix) {
+    if (data_path(folder)) {
+        auto expected = manifest.initial_data.files.at(folder);
+        expected.path = prefix + folder;
+        return file_matches(root, expected);
+    }
     for (const auto &[path, f] : manifest.initial_data.files)
         if (path.starts_with(folder + '/')) {
             auto expected = f;
@@ -107,45 +130,45 @@ TransactionResult recover_initial_data(const SafeRoot &root, const TrustedKeys &
     if (!local.installed)
         fail(ErrorCategory::Recovery, "Reset requires authenticated installed metadata");
     const auto &manifest = local.installed->manifest;
-    auto reset = decode(root.read(journal_path, 1024 * 1024), manifest);
+    auto reset = decode(root.read(journal_path, 16 * 1024 * 1024), manifest);
     const auto prefix = ".launcher/resets/" + reset.id + '/';
     bool complete = true;
-    for (const auto &[folder, existed] : reset.folders) {
+    for (const auto &[folder, existed] : reset.paths) {
         (void)existed;
-        if (directory_exists(root, prefix + "new/" + folder))
-            complete &= matches_folder(root, manifest, folder, prefix + "new/");
+        if (scope_exists(root, prefix + "new/" + folder, data_path(folder)))
+            complete &= matches_scope(root, manifest, folder, prefix + "new/");
         else
-            complete &= directory_exists(root, folder) && matches_folder(root, manifest, folder, "");
+            complete &= scope_exists(root, folder, data_path(folder)) && matches_scope(root, manifest, folder, "");
     }
     if (!complete && reset.phase != "rollback") {
         reset.phase = "rollback";
         root.write_atomic(journal_path, encode(reset), checkpoint);
     }
-    for (const auto &[folder, existed] : reset.folders) {
+    for (const auto &[folder, existed] : reset.paths) {
         const auto staged = prefix + "new/" + folder, original = prefix + "original/" + folder;
-        const bool has_stage = directory_exists(root, staged),
-                   has_original = directory_exists(root, original);
+        const bool file = data_path(folder), has_stage = scope_exists(root, staged, file),
+                   has_original = scope_exists(root, original, file);
         if (reset.phase == "rollback") {
             if (has_original || (!existed && !has_stage)) {
-                if (directory_exists(root, folder))
-                    root.rename_directory(folder, prefix + "discard/" + folder);
+                if (scope_exists(root, folder, file))
+                    move_scope(root, folder, prefix + "discard/" + folder, file);
                 step(checkpoint, "reset rollback replacement moved");
                 if (has_original)
-                    root.rename_directory(original, folder);
+                    move_scope(root, original, folder, file);
                 step(checkpoint, "reset original restored");
             }
         } else if (has_stage) {
             if (existed && !has_original) {
-                root.rename_directory(folder, original);
+                move_scope(root, folder, original, file);
                 step(checkpoint, "reset original moved");
             }
-            root.rename_directory(staged, folder);
+            move_scope(root, staged, folder, file);
             step(checkpoint, "reset defaults published");
         }
     }
     if (reset.phase == "commit")
-        for (const auto &[folder, existed] : reset.folders)
-            if (!matches_folder(root, manifest, folder, ""))
+        for (const auto &[folder, existed] : reset.paths)
+            if (!matches_scope(root, manifest, folder, ""))
                 fail(ErrorCategory::Recovery, "Reset defaults changed during commit");
     if (reset.retain && reset.phase == "commit" && directory_exists(root, prefix + "original")) {
         const auto backup = ".launcher/backups/reset-data/" + reset.id;
@@ -178,11 +201,11 @@ TransactionResult Installer::reset_initial_data(PackageFetcher fetch, std::stop_
     if (manifest.initial_data.folders.empty())
         fail(ErrorCategory::Manifest, "Installed release has no initial data");
     Reset reset{unique_id(), manifest.payload_hash};
-    for (const auto &folder : manifest.initial_data.folders) {
-        const bool existed = directory_exists(root_, folder);
-        if (existed)
+    for (const auto &folder : initial_reset_paths(manifest)) {
+        const bool existed = scope_exists(root_, folder, data_path(folder));
+        if (existed && !data_path(folder))
             inspect_tree(SafeRoot(root_.path() / utf8_path(folder)));
-        reset.folders.emplace(folder, existed);
+        reset.paths.emplace(folder, existed);
     }
     std::uint64_t required = 16 * 1024 * 1024;
     for (const auto &id : manifest.initial_data.packages) {

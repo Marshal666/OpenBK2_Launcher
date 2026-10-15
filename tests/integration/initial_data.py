@@ -152,6 +152,16 @@ def main():
             assert not (case / ".launcher/initial-reset.json").exists()
             assert not list((case / ".launcher/resets").rglob("*.cfg"))
         assert partial
+        # Pending v1 whole-folder reset journals from launcher 0.3.0 remain recoverable.
+        legacy = temp / "legacy-reset"
+        shutil.copytree(partial, legacy)
+        journal = legacy / ".launcher/initial-reset.json"
+        legacy_data = json.loads(journal.read_text())
+        legacy_data["reset_schema_version"] = 1
+        legacy_data["folders"] = legacy_data.pop("paths")
+        journal.write_bytes(stable_json(legacy_data))
+        invoke(legacy, 3, action="recover")
+        new_contents(legacy)
         for path in (partial / ".launcher/resets").glob("*/new/Profiles/default.cfg"):
             path.unlink()
         rollback_seed = temp / "rollback-seed"
@@ -170,7 +180,7 @@ def main():
         shutil.copytree(rollback_seed, forged)
         journal = forged / ".launcher/initial-reset.json"
         data = json.loads(journal.read_text())
-        data["folders"]["Data"] = True
+        data["paths"]["Data"] = True
         journal.write_bytes(stable_json(data))
         invoke(forged, 3, action="recover", code=1)
         assert (forged / "Data/user.pak").read_bytes() == b"unmanaged data"

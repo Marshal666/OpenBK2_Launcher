@@ -17,6 +17,8 @@ and public verification key; no production trust values or private keys are bund
 
 Launcher 0.3 adds initial data and fast startup; see its
 [behavior and validation report](docs/INITIAL_DATA_AND_STARTUP.md).
+Version 0.3.1 also allows initial defaults alongside managed files in `Data/`,
+with path-collision checks and Reset limited to the initial files there.
 
 **Publishing** Follow the [step-by-step publishing guide](docs/PUBLISHING.md)
 to create the GitHub repository and signing key, connect a production launcher,

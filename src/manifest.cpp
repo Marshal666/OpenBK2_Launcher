@@ -397,10 +397,13 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
         for (auto item : array(get(value, "folders"))) {
             const auto folder = string(item), key = path_key(folder);
             folders.add(folder);
-            require(folder.find('/') == folder.npos && key != ".launcher" && key != "bin" && key != "data" &&
+            require(folder.find('/') == folder.npos && key != ".launcher" && key != "bin" &&
                         key != "mods" && key != "launcher_installed.txt" &&
                         !key.starts_with("openbk2launcher"),
                     "Unsafe initial-data folder");
+            if (key == "data")
+                require(required_version >= std::array<unsigned long, 3>{0, 3, 1},
+                        "Initial files in Data require launcher 0.3.1");
             initial.folders.insert(folder);
         }
         require(initial.folders.size() <= 64, "Too many initial-data folders");
@@ -418,6 +421,8 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
             require(slash != path.npos && !f.executable,
                     "Initial data must be non-executable files inside folders");
             populated.insert(path.substr(0, slash));
+            if (data_path(path))
+                initial.data_file_keys.insert(path_key(path));
             validate_game_path(path, {path});
             require(packaged.contains(path) && same_bytes(f, packaged.at(path)),
                     "Initial package bytes mismatch");
@@ -425,9 +430,17 @@ Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, Man
             size += f.size;
         }
         require(populated == initial.folders, "Initial-data folders must contain files");
-        for (const auto &[platform, target] : m.platforms)
-            for (const auto &[path, f] : target.files)
+        for (const auto &[platform, target] : m.platforms) {
+            Paths combined;
+            for (const auto &[path, f] : target.files) {
                 require(!initial_data_path(m, path), "Initial-data folders overlap managed game files");
+                combined.add(path);
+            }
+            for (const auto &[path, f] : initial.files)
+                combined.add(path);
+            for (const auto &[locale, language] : m.languages)
+                combined.add(language.file.path);
+        }
     }
     require(used.size() == m.packages.size(), "Unreferenced packages");
     return m;
@@ -445,8 +458,24 @@ Inventory desired_files(const Manifest &m, const std::string &platform, const st
     return result;
 }
 bool initial_data_path(const Manifest &m, std::string_view path) {
+    if (data_path(path)) {
+        return m.initial_data.data_file_keys.contains(path_key(path));
+    }
     const auto top = path_key(path.substr(0, path.find('/')));
     return std::any_of(m.initial_data.folders.begin(), m.initial_data.folders.end(),
                        [&](const auto &folder) { return path_key(folder) == top; });
+}
+bool data_path(std::string_view path) {
+    return path.size() > 5 && path_key(path.substr(0, 5)) == "data/";
+}
+std::set<std::string> initial_reset_paths(const Manifest &m) {
+    std::set<std::string> result;
+    for (const auto &folder : m.initial_data.folders)
+        if (path_key(folder) != "data")
+            result.insert(folder);
+    for (const auto &[path, file] : m.initial_data.files)
+        if (data_path(path))
+            result.insert(path);
+    return result;
 }
 } // namespace launcher

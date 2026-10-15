@@ -324,15 +324,25 @@ bool settings_page(SDL_Window *window, Controller &controller, const UiSnapshot 
             if (action("Reset initial data", !game, "Close the game first"))
                 ImGui::OpenPopup("Reset initial data?");
             if (ImGui::BeginPopupModal("Reset initial data?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::TextUnformatted("Restore the installed release's defaults in these folders:");
-                for (const auto &name : state.installed->manifest.initial_data.folders)
-                    ImGui::BulletText("%s", name.c_str());
-                ImGui::TextColored({1, .65f, .5f, 1},
-                                   "Current settings, saves, and all added files in these\nfolders will be "
-                                   "deleted from the game installation.");
+                const auto &initial = state.installed->manifest.initial_data;
+                ImGui::TextUnformatted("Restore the installed release's defaults:");
+                bool whole_folders = false;
+                for (const auto &name : initial.folders) {
+                    if (path_key(name) == "data")
+                        ImGui::BulletText("Data: restore published defaults only; keep other files");
+                    else {
+                        ImGui::BulletText("%s: replace the entire folder", name.c_str());
+                        whole_folders = true;
+                    }
+                }
+                if (whole_folders)
+                    ImGui::TextColored({1, .65f, .5f, 1},
+                                       "Settings, saves, and added files in the whole folders\n"
+                                       "listed above will be deleted from the game installation.");
+                ImGui::TextUnformatted("Edits to the restored defaults will be lost.");
                 ImGui::TextUnformatted(
                     build::retain_user_backups
-                        ? "A backup of the current folders will be retained."
+                        ? "A backup of replaced data will be retained."
                         : "This cannot be undone.\nPersonal data cannot be downloaded again.");
                 if (action("Reset and replace", !state.busy && !game, "Close the game first")) {
                     controller.reset_initial_data();

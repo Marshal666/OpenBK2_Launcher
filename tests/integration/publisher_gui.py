@@ -33,6 +33,7 @@ def main():
             "linux/bin/Game": b"synthetic Linux game", "languages/texts-en.pak": b"English",
             "mods/Example/mod.pak": b"mod data", "shared/Profiles/official.dat": b"official profile",
             "initial/Editor/default.cfg": b"initial editor defaults",
+            "initial/Data/settings.cfg": b"initial settings beside managed Data",
             "windows/bin/debug.log": b"exclude this",
         }
         for name, content in data.items():
@@ -60,9 +61,9 @@ def main():
         key_hash = hashlib.sha256(Path(config["key_file"]).read_bytes()).hexdigest()
         trusted = {config["key_id"]: bytes.fromhex(first["public_key"])}
         manifest = verify_release(first["release_dir"], trusted)
-        assert manifest["schema_version"] == 3 and manifest["min_launcher_version"] == "0.3.0"
-        assert manifest["initial_data"]["folders"] == ["Editor"]
-        assert [f["path"] for f in manifest["initial_data"]["files"]] == ["Editor/default.cfg"]
+        assert manifest["schema_version"] == 3 and manifest["min_launcher_version"] == "0.3.1"
+        assert manifest["initial_data"]["folders"] == ["Data", "Editor"]
+        assert [f["path"] for f in manifest["initial_data"]["files"]] == ["Data/settings.cfg", "Editor/default.cfg"]
         assert all(p["platform"] == "any" for p in manifest["packages"] if p["kind"] == "initial")
         assert "Example" in manifest["mods"]
         assert all(f["path"] != "bin/debug.log" for f in manifest["platforms"]["windows-x64"]["files"])
@@ -84,7 +85,7 @@ def main():
         assert not (Path(keys) / "missing.pem").exists()
         second = publisher.run_job(update, report=lambda _: None)
         manifest = verify_release(second["release_dir"], trusted)
-        assert manifest["initial_data"]["files"][0]["sha256"] == hashlib.sha256(new_initial).hexdigest()
+        assert next(f for f in manifest["initial_data"]["files"] if f["path"] == "Editor/default.cfg")["sha256"] == hashlib.sha256(new_initial).hexdigest()
         assert all(not f["path"].startswith("Editor/")
                    for platform in manifest["platforms"].values() for f in platform["files"])
         shared_patches = [p for p in manifest["packages"] if p["kind"] == "patch" and p["platform"] == "any"]

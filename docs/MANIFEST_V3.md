@@ -30,18 +30,23 @@ to the ordinary per-file/package limits. All files have `executable: false`.
 Folder names are unique portable top-level path components; every listed
 folder must contain a file. Empty initial data uses three empty arrays.
 
-`bin`, `Data`, `MODs`, `.launcher`, `launcher_installed.txt` and launcher names
+`bin`, `MODs`, `.launcher`, `launcher_installed.txt` and launcher names
 are prohibited, case-insensitively. All files must be strictly inside one listed
 folder. No platform's managed inventory may contain any path within those
-folders. The initial inventory is separate from platform `files`, snapshots,
-patches, languages and mods. It grants authority to supply defaults and perform
+folders, except for `Data/` with `min_launcher_version >= 0.3.1`. Data uses
+file-level ownership: initial files may share directories with managed files,
+but the combined initial/platform/all-language inventory must have no duplicate,
+case-aliased or file/directory-conflicting paths. The initial inventory is
+separate from platform `files`, snapshots, patches, languages and mods.
+It grants authority to supply defaults and perform
 the user's explicit Reset, not to continuously reconcile mutable files.
 
 During install, the planner adds only missing defaults for previously
 uninitialized folders. The ordinary file transaction signs off newly seeded
 bytes together with the base installation. Files already present are untouched.
-Migration from a prior managed inventory excludes initial folders from obsolete
-file removals. All later automatic managed-file checks exclude initialized data.
+Migration from a prior managed inventory excludes initial ownership scopes
+(whole folders, or listed Data files) from obsolete-file removals. All later
+automatic managed-file checks exclude initialized data.
 
 Local state v2 adds `initialized_folders` to the v1 fields. The markers persist
 across releases, including releases that omit initial data. They can only
@@ -49,9 +54,19 @@ restrict automatic writes; they cannot authorize deletion or override signed
 inventories. A missing/invalid state uses safe adoption and fills only missing
 defaults. V1 local states remain readable with v1/v2 manifests.
 
+Data support uses local state v3, adding `initialized_data_files`: normalized
+case-folded paths that remain protected after defaults disappear from a release.
+The `Data` folder marker still prevents automatic reseeding, while managed files
+at other paths continue updating. Previously initialized paths and their file/
+directory ancestors or descendants cannot become managed files. States v1/v2
+remain readable for installations without initial Data files.
+
 Reset uses the authenticated **installed** manifest, so it never mixes defaults
 from an uninstalled update with the current game. Its `.launcher/initial-reset.json`
-journal binds the payload hash, unique operation ID, signed folder names,
-original-folder presence, commit/rollback phase and backup policy. Verified
-replacement folders and temporary originals live under `.launcher/resets/`.
+journal binds the payload hash, unique operation ID, signed reset paths,
+original-path presence, commit/rollback phase and backup policy. Reset journal
+v2 uses `paths`: whole folders outside Data, and individual declared initial
+files inside Data. It never authorizes replacing Data itself or unrelated files.
+Legacy v1 `folders` journals remain recoverable for whole-folder releases.
+Verified replacements and temporary originals live under `.launcher/resets/`.
 Recovery needs no network. See [the recovery protocol](UPDATE_PROTOCOL.md).

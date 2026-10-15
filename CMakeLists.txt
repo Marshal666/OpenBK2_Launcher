@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(OpenBK2Launcher VERSION 0.3.0 LANGUAGES C CXX)
+project(OpenBK2Launcher VERSION 0.3.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -160,6 +160,10 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/tests/integration/initial_data.py $<TARGET_FILE:installer_check>
     $<TARGET_FILE:manifest_check> $<TARGET_FILE:lifecycle_check> $<TARGET_FILE:fixture_game>)
   set_tests_properties(initial_data PROPERTIES TIMEOUT 240)
+  add_test(NAME initial_data_in_data COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/tests/integration/initial_data_in_data.py $<TARGET_FILE:installer_check>
+    $<TARGET_FILE:manifest_check> $<TARGET_FILE:fixture_game>)
+  set_tests_properties(initial_data_in_data PROPERTIES TIMEOUT 240)
   add_test(NAME filesystem_safety COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_SOURCE_DIR}/tests/integration/filesystem_safety.py $<TARGET_FILE:lifecycle_check>)
   set_tests_properties(filesystem_safety PROPERTIES TIMEOUT 90)

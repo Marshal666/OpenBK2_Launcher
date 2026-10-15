@@ -25,11 +25,8 @@ UpdatePlan plan_update(const SafeRoot &root, const LocalInstallation &local, con
     UpdatePlan plan;
     plan.desired = desired_files(target, platform, language);
     for (const auto &[path, f] : plan.desired) {
-        if (local.installed)
-            for (const auto &folder : local.installed->initialized_folders)
-                if (path_key(folder) == path_key(path.substr(0, path.find('/'))))
-                    fail(ErrorCategory::Manifest,
-                         "Release attempts to manage an initialized user folder: " + folder);
+        if (local.installed && initialized_user_path(*local.installed, path))
+            fail(ErrorCategory::Manifest, "Release attempts to manage initialized user data: " + path);
         if (mode == InstallMode::Reinstall || !file_matches(root, f, stop))
             plan.changed.emplace(path, f);
     }

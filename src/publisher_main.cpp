@@ -403,7 +403,7 @@ struct Publisher : publisher::Settings {
         ImGui::SeparatorText("Unpacked game files");
         if (table("inputs")) {
             row(window, "Shared files", "shared_root", 1, "Optional");
-            row(window, "Init shared files", "shared_init_data", 1, "Optional; folder containing Editor/, Profiles/, etc.");
+            row(window, "Init shared files", "shared_init_data", 1, "Optional; folder containing Editor/, Profiles/, Data/, etc.");
             row(window, "Windows files", "windows_root", 1, "Leave blank if not shipping Windows");
             row(window, "Linux files", "linux_root", 1, "Leave blank if not shipping Linux");
             row(window, "Language packs", "languages_dir", 1, "Folder containing texts-en.pak, etc.");
@@ -411,7 +411,7 @@ struct Publisher : publisher::Settings {
             ImGui::EndTable();
         }
         ImGui::TextDisabled("Supply complete input folders, including unchanged files.");
-        ImGui::TextDisabled("Init shared files become user-owned after installation (launcher 0.3+).");
+        ImGui::TextDisabled("Init files become user-owned. Data/ defaults require launcher 0.3.1+.");
         if (ImGui::CollapsingHeader("More options")) {
             if (table("options")) {
                 row(window, "Launcher source", "source_dir", 1);

@@ -65,8 +65,8 @@ optional production-launcher build explicitly disables fixture mode.
    output under `releases/0.1.0` and publishes tag `v0.1.0`.
 6. Browse to the **shared**, **Windows**, **Linux**, **language** and optional
    **mod** folders. For one-time defaults, set **Init shared files** to a separate
-   folder containing game-relative paths such as `Editor/default.cfg` and
-   `Profiles/default.cfg`. Leave it blank if unused. Leave an unused platform
+   folder containing game-relative paths such as `Editor/default.cfg`,
+   `Profiles/default.cfg` or `Data/settings.cfg`. Leave it blank if unused. Leave an unused platform
    blank; supply at least one platform and one language. Scroll the form to reach
    all entries.
 7. If needed, expand **More options** to choose your launcher source checkout
@@ -91,7 +91,10 @@ app's own version.
 launcher **0.3.0 or newer**. These files become user-owned after initialization;
 ordinary updates do not overwrite them or restore deleted defaults. Keep their
 top-level folders out of the managed shared/platform inputs and official-file
-opt-ins. See [initial-data inputs](PUBLISHING_INPUTS.md#initial-data) for details.
+opt-ins, except for **Data/**: launcher **0.3.1+** allows initial and managed files
+there when their paths do not collide. Reset replaces only the declared initial
+files inside Data and preserves its other content. See
+[initial-data inputs](PUBLISHING_INPUTS.md#initial-data) for details.
 
 To try the process first, select **Local check only (no upload)**. The main
 button becomes **Build and verify locally**. After success, the app enables

@@ -9,6 +9,7 @@ struct InstalledState {
     std::string platform, language;
     Inventory files;
     std::set<std::string> initialized_folders;
+    std::set<std::string> initialized_data_files; // Case-folded; guards only, never deletion authority.
 };
 struct LocalInstallation {
     std::optional<Manifest> authenticated_manifest;
@@ -17,7 +18,9 @@ struct LocalInstallation {
     std::string warning;
 };
 std::string serialize_state(const Manifest &manifest, const std::string &platform,
-                            const std::string &language, std::set<std::string> initialized_folders = {});
+                            const std::string &language, std::set<std::string> initialized_folders = {},
+                            std::set<std::string> initialized_data_files = {});
+bool initialized_user_path(const InstalledState &state, std::string_view path);
 InstalledState parse_state(std::string_view state, Manifest manifest);
 LocalInstallation load_local(const SafeRoot &root, const TrustedKeys &keys, ManifestPolicy policy = {});
 bool file_matches(const SafeRoot &root, const FileRecord &file, std::stop_token stop = {});

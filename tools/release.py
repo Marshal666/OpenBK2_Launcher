@@ -13,7 +13,7 @@ import zipfile
 from schema import PACKAGE_LIMIT, inventory, managed_path, paths_unique, require, safe_path, safe_url, validate_payload
 from signing import keygen, load_private, sign_payload, stable_json, strict_json, verify_envelope
 
-TOOL_VERSION = "0.3.0"
+TOOL_VERSION = "0.3.1"
 
 
 def file_hash(path):
@@ -147,6 +147,11 @@ def build_release(*, out, version, sequence, roots, languages_dir, base_url, pre
         packages = make_packages(out, base_url, "initial", "any", records, sources, package_limit)
         m["packages"].extend(packages)
         m["initial_data"] = {"folders": sorted({f["path"].split('/')[0] for f in records}), "files": records, "package_ids": [p["id"] for p in packages]}
+        if any(folder.lower() == "data" for folder in m["initial_data"]["folders"]):
+            m["min_launcher_version"] = "0.3.1"
+    if old:
+        m["min_launcher_version"] = max(m["min_launcher_version"], old["min_launcher_version"],
+                                        key=lambda v: tuple(map(int, v.split('.'))))
     histories = {}
     if old:
         metadata = strict_json((previous / "release-metadata.json").read_bytes())
@@ -324,7 +329,7 @@ def main():
     b.add_argument("--windows-root")
     b.add_argument("--linux-root")
     b.add_argument("--shared-root", help="Common game files, packaged once for both platforms")
-    b.add_argument("--shared-init-data", help="Shared initial files in game-relative folders (e.g. Editor/ and Profiles/); installed once, then user-owned")
+    b.add_argument("--shared-init-data", help="Shared initial files in game-relative folders (e.g. Editor/, Profiles/, Data/); installed once, then user-owned. Data files must not collide with managed files.")
     b.add_argument("--mods-dir", help="Optional downloadable mods, one folder per mod")
     b.add_argument("--previous-release")
     b.add_argument("--managed-user-file", action="append", default=[])

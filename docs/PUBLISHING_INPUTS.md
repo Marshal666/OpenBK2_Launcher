@@ -128,6 +128,7 @@ input tree, for example:
 
 ```text
 input/initial/
+  Data/settings.cfg
   Editor/default.cfg
   Profiles/default.cfg
   Profiles/default-player/options.dat
@@ -135,38 +136,58 @@ input/initial/
 
 These files are packaged once for both platforms as `initial-any-<sha256>.zip`
 and authenticated like every other download. Supply unpacked files, not ZIPs.
-Initial files must live under portable top-level folders. `bin`, `Data`, `MODs`,
-launcher metadata and launcher filenames are forbidden. Whole initial-data
-folders must be absent from the managed shared/platform inputs. Empty folders
+Initial files must live under portable top-level folders. `bin`, `MODs`,
+launcher metadata and launcher filenames are forbidden. **`Data/` may contain
+both managed files and initial files**, provided their game-relative paths do
+not collide. For example, `shared/Data/base.pak` and
+`initial/Data/settings.cfg` are valid together. Two copies of
+`Data/settings.cfg` are rejected, even if their contents match. The check covers
+shared files, every platform and all language packs; case aliases and
+file/directory conflicts are rejected too. Use the exact `Data/` spelling.
+
+Other whole initial-data folders, such as `Editor/` and `Profiles/`, must be
+absent from the managed shared/platform inventories. Empty folders
 and executable initial files are not supported; initial files are always installed
 without execute permissions.
 
 On first installation/adoption, only missing files are copied. Existing content
 is preserved. Each folder is then recorded as initialized. Updates, Repair and
-Full reinstall leave it untouched, even if the game modifies or deletes defaults.
+Full reinstall leave its initial files untouched, even if the game modifies or
+deletes defaults. Managed assets alongside them in `Data/` still update normally.
 New defaults in a later release are used by fresh installations and Reset;
 they are not silently inserted into an initialized folder. A newly introduced
 top-level initial-data folder is initialized once when that release is installed.
 
-**Settings > Reset initial data** restores the installed release's defaults in
-all declared initial-data folders. It replaces their entire contents, including
-user-created saves/settings, after confirmation. With the default backup policy,
-this is permanent. Published defaults are fetched again when absent from cache;
+**Settings > Reset initial data** restores the installed release's defaults
+after confirmation. Inside `Data/`, it replaces only the files listed in the
+initial inventory; managed assets, language packs and other files are preserved,
+including other files in the same subfolder. For other initial-data folders, it
+replaces their entire contents, including user-created saves/settings. With the
+default backup policy, this is permanent. Published defaults are fetched again when absent from cache;
 personal changes cannot be reconstructed from GitHub. The game must be closed.
 Downloads are verified before any live folder changes; interrupted resets finish
-or restore the original folders from temporary recovery copies.
+or restore the original content from temporary recovery copies.
 
 To migrate an existing release, move the entire `Editor/` and/or `Profiles/`
 input folders into `input/initial/`, remove their `--managed-user-file` options,
 add `--shared-init-data`, and build/sign/publish a **higher sequence** with
 `--previous-release`. Migration preserves existing files and relinquishes base
-ownership without deleting them. Initialized folders cannot subsequently become
-managed base folders. Removing defaults from a release does not delete user data;
+ownership without deleting them. Whole-folder initial scopes cannot subsequently
+become managed base folders. Removing defaults from a release does not delete user data;
 the once-only markers survive and prevent reseeding if defaults return later.
 
-This requires launcher **0.3.0 or newer** and [manifest v3](MANIFEST_V3.md).
+For `Data/`, move only the selected defaults out of the shared/platform inputs
+and into `initial/Data/`. Their existing installed copies are preserved during
+migration, while other `Data/` assets remain managed. Previously initialized
+Data file paths cannot later become managed files, even after a release omits
+those defaults. The `Data/` initialization marker follows the same once-per-folder
+rule: adding another default later does not insert it into an initialized `Data/`.
+
+Initial data requires launcher **0.3.0 or newer** and [manifest v3](MANIFEST_V3.md).
+Initial files under `Data/` require **0.3.1 or newer**. The publisher sets this
+minimum automatically and preserves it in subsequent releases.
 Rebuild/distribute the production launcher with the same URL/key before publishing
-the new manifest. Older launchers reject the new schema.
+the new manifest. Older launchers reject an unsupported schema or minimum version.
 
 ## Profiles, MODs and language files
 

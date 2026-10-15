@@ -243,6 +243,12 @@ Initial data requires launcher **0.3.0 or newer**. When upgrading an existing
 deployment, rebuild/distribute the production launcher with its existing URL/key
 before publishing a manifest that uses `--shared-init-data`.
 
+Launcher **0.3.1+** also supports `input/initial/Data/` alongside managed
+`input/shared/Data/`. Put each file in only one input: file collisions, case
+aliases, file/directory conflicts and overlaps with language packs are rejected.
+Reset restores only listed initial files inside `Data/`, preserving its other
+content. The publisher sets the required launcher version automatically.
+
 ### Step 6 Build sign and publish the first release
 
 Run each block in order and stop if any command reports an error.

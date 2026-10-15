@@ -286,6 +286,10 @@ TransactionResult Transaction::recover() {
         old = parse_state(root_.read(prefix + "old.state.json", 16 * 1024 * 1024), *old_manifest);
     if (old_manifest)
         enforce_sequence(target, old_manifest->sequence, old_manifest->payload_hash);
+    if (old)
+        for (const auto &[path, file] : desired)
+            if (initialized_user_path(*old, path))
+                fail(ErrorCategory::Recovery, "Transaction attempts to manage initialized user data: " + path);
     if (j.new_sequence != target.sequence || j.old_sequence != (old_manifest ? old_manifest->sequence : 0))
         fail(ErrorCategory::Recovery, "Journal sequence does not match signatures");
     bool can_finish = true;
@@ -407,7 +411,8 @@ TransactionResult Transaction::recover() {
     root_.write_atomic(".launcher/installed_manifest.envelope.json", target.envelope, checkpoint_);
     root_.write_atomic(".launcher/state.json",
                        serialize_state(target, j.platform, j.language,
-                                       old ? old->initialized_folders : std::set<std::string>{}),
+                                       old ? old->initialized_folders : std::set<std::string>{},
+                                       old ? old->initialized_data_files : std::set<std::string>{}),
                        checkpoint_);
     root_.write_atomic("launcher_installed.txt",
                        "OpenBK2 Launcher " + std::string(build::version) + "\nGame: " + target.version +

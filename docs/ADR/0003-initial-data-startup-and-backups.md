@@ -12,6 +12,14 @@ Reset is a separate journaled directory replacement authorized by the installed
 signature and an explicit UI confirmation. Complete initial folders are replaced,
 including user-created content. Updates and Repair cannot implicitly reset them.
 
+Launcher 0.3.1 adds a Data-only exception: initial and managed files may share
+Data directories when their full paths do not collide, including aliases,
+file/directory conflicts and language packs. Data defaults retain the existing
+once-per-folder seeding rule, with persistent per-file ownership guards. Reset
+replaces only the signed initial files in Data, using the same recoverable
+staging/original mechanism; it never swaps the whole Data directory. Other
+initial folders keep their existing whole-folder ownership and Reset behavior.
+
 Startup/Play still authenticate local metadata, reject pending recovery, validate
 the install root and launch profile, safely open the executable and check its
 size/native format (and Linux execute bit). They do not hash game files, including

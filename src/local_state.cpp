@@ -20,9 +20,14 @@ std::string utc_now() {
 }
 } // namespace
 std::string serialize_state(const Manifest &m, const std::string &platform, const std::string &language,
-                            std::set<std::string> initialized_folders) {
+                            std::set<std::string> initialized_folders,
+                            std::set<std::string> initialized_data_files) {
     using json::quote;
-    std::string data = "{\"state_schema_version\":2,\"installed_release\":{\"version\":" + quote(m.version) +
+    for (const auto &[path, file] : m.initial_data.files)
+        if (data_path(path))
+            initialized_data_files.insert(path_key(path));
+    std::string data = "{\"state_schema_version\":" + std::string(initialized_data_files.empty() ? "2" : "3") +
+                       ",\"installed_release\":{\"version\":" + quote(m.version) +
                        ",\"sequence\":" + std::to_string(m.sequence) +
                        ",\"signed_payload_sha256\":" + quote(m.payload_hash) +
                        "},\"platform\":" + quote(platform) + ",\"installed_language\":" + quote(language) +
@@ -45,7 +50,19 @@ std::string serialize_state(const Manifest &m, const std::string &platform, cons
         first = false;
         data += quote(folder);
     }
-    return data + "],\"updated_utc\":" + quote(utc_now()) + "}";
+    data += ']';
+    if (!initialized_data_files.empty()) {
+        data += ",\"initialized_data_files\":[";
+        first = true;
+        for (const auto &path : initialized_data_files) {
+            if (!first)
+                data += ',';
+            first = false;
+            data += quote(path);
+        }
+        data += ']';
+    }
+    return data + ",\"updated_utc\":" + quote(utc_now()) + "}";
 }
 InstalledState parse_state(std::string_view state, Manifest manifest) {
     using namespace json;
@@ -54,22 +71,35 @@ InstalledState parse_state(std::string_view state, Manifest manifest) {
     fields(value,
            {"state_schema_version", "installed_release", "platform", "installed_language",
             "highest_accepted_sequence", "managed_files", "updated_utc"},
-           {"requested_language", "initialized_folders"});
+           {"requested_language", "initialized_folders", "initialized_data_files"});
     const auto schema = number(get(value, "state_schema_version"));
-    require(schema == 1 || schema == 2, "Unsupported local state schema");
-    std::set<std::string> initialized;
-    if (schema == 2) {
+    require(schema >= 1 && schema <= 3, "Unsupported local state schema");
+    std::set<std::string> initialized, initialized_files;
+    if (schema >= 2) {
         for (auto item : array(get(value, "initialized_folders"))) {
             const auto folder = string(item);
             validate_relative_path(folder);
             require(folder.find('/') == folder.npos && initialized.insert(folder).second,
                     "Invalid initialized folder");
+            require(path_key(folder) != "data" || schema == 3, "Data initialization requires state v3");
         }
         require(initialized.size() <= 256, "Too many initialized folders");
         for (const auto &folder : manifest.initial_data.folders)
             require(initialized.contains(folder), "Initial-data installation was not completed");
     } else
         require(manifest.initial_data.folders.empty(), "Initial-data installation requires state v2");
+    if (schema == 3) {
+        for (auto item : array(get(value, "initialized_data_files"))) {
+            const auto path = string(item);
+            validate_relative_path(path);
+            require(data_path(path) && initialized_files.insert(path_key(path)).second,
+                    "Invalid initialized Data file");
+        }
+        require(initialized_files.size() <= 100000, "Too many initialized Data files");
+        for (const auto &[path, file] : manifest.initial_data.files)
+            if (data_path(path))
+                require(initialized_files.contains(path_key(path)), "Initial Data files were not recorded");
+    }
     auto installed = get(value, "installed_release");
     fields(installed, {"version", "sequence", "signed_payload_sha256"});
     require(number(get(installed, "sequence")) == manifest.sequence &&
@@ -90,7 +120,25 @@ InstalledState parse_state(std::string_view state, Manifest manifest) {
                 "Local state file differs from signed inventory");
     }
     require(seen.size() == expected.size(), "Local inventory is incomplete");
-    return {std::move(manifest), platform, language, std::move(expected), std::move(initialized)};
+    return {std::move(manifest), platform, language, std::move(expected), std::move(initialized),
+            std::move(initialized_files)};
+}
+bool initialized_user_path(const InstalledState &state, std::string_view path) {
+    const auto key = path_key(path), top = key.substr(0, key.find('/'));
+    for (const auto &folder : state.initialized_folders)
+        if (path_key(folder) != "data" && path_key(folder) == top)
+            return true;
+    if (top == "data") {
+        if (state.initialized_data_files.contains(key))
+            return true;
+        const auto next = state.initialized_data_files.lower_bound(key + '/');
+        if (next != state.initialized_data_files.end() && next->starts_with(key + '/'))
+            return true;
+        for (auto slash = key.find('/'); slash != key.npos; slash = key.find('/', slash + 1))
+            if (state.initialized_data_files.contains(key.substr(0, slash)))
+                return true;
+    }
+    return false;
 }
 LocalInstallation load_local(const SafeRoot &root, const TrustedKeys &keys, ManifestPolicy policy) {
     LocalInstallation result;

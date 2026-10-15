@@ -50,6 +50,7 @@ struct InitialDataRecord {
     std::set<std::string> folders;
     Inventory files;
     std::vector<std::string> packages;
+    std::set<std::string> data_file_keys; // Case-folded lookup for file-scoped ownership.
 };
 struct Manifest {
     std::string version, created_utc, payload, payload_hash, envelope;
@@ -70,6 +71,9 @@ void validate_relative_path(std::string_view path);
 std::string path_key(std::string_view path);
 void validate_game_path(std::string_view path, const std::set<std::string> &allowlist);
 bool initial_data_path(const Manifest &manifest, std::string_view path);
+bool data_path(std::string_view path);
+// Whole folders outside Data; only explicitly listed files inside Data.
+std::set<std::string> initial_reset_paths(const Manifest &manifest);
 bool safe_url(std::string_view url, ManifestPolicy policy = {});
 Manifest verify_manifest(std::string_view envelope, const TrustedKeys &keys, ManifestPolicy policy = {});
 void enforce_sequence(const Manifest &target, std::uint64_t highest, std::string_view accepted_hash);

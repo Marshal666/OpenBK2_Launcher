@@ -5,6 +5,12 @@ manifest validation, seeding/reset/recovery and readiness checks remain in the
 core and Python toolkit, independent of the GUI. Architectural changes are
 recorded in [ADR 0003](ADR/0003-initial-data-startup-and-backups.md).
 
+Launcher **0.3.1** also permits initial files under `Data/` alongside managed
+assets, with full-path collision checks against both platforms and every
+language. Reset replaces only declared initial Data files. Other Data content
+is preserved; other initial folders retain whole-folder Reset behavior. See
+[the input reference](PUBLISHING_INPUTS.md#initial-data) for layout and migration.
+
 ## Behavior and files
 
 - `tools/release.py` / `tools/schema.py`: `--shared-init-data`, signed v3 initial
